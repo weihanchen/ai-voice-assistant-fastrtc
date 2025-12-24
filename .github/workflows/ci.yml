@@ -24,7 +24,7 @@ jobs:
           cache-dependency-glob: "uv.lock"
 
       - name: 安裝相依套件
-        run: uv sync --locked
+        run: uv sync --locked --extra dev
 
       - name: 執行 Ruff 檢查
         run: uv run ruff check src/ tests/
