@@ -17,15 +17,14 @@ jobs:
         uses: actions/checkout@v4
 
       - name: 安裝 uv
-        uses: astral-sh/setup-uv@v4
+        uses: astral-sh/setup-uv@v7
         with:
-          version: "latest"
-
-      - name: 設定 Python
-        run: uv python install 3.14
+          python-version: "3.14"
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
 
       - name: 安裝相依套件
-        run: uv sync
+        run: uv sync --locked
 
       - name: 執行 Ruff 檢查
         run: uv run ruff check src/ tests/
