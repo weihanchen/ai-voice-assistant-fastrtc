@@ -61,4 +61,4 @@ Thumbs.db
 logs/
 
 # uv
-uv.lock
+# 注意：uv.lock 應該提交到版本控制，確保 CI 和團隊成員使用相同的相依套件版本
