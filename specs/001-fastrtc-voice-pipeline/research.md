@@ -67,71 +67,84 @@ class WhisperSTT:
 ## 2. Kokoro TTS 中文支援
 
 ### Decision
-使用 Kokoro-82M-v1.1-zh 中文模型，透過 kokoro-onnx 套件整合。
+使用 Kokoro-82M-v1.1-zh 中文模型，透過原生 kokoro + misaki[zh] 套件整合。
+
+> **實作更新（2025-12-25）**: 原先規劃使用 `kokoro-onnx`，但實測發現其使用 espeak 後端不支援中文。最終採用原生 `kokoro` 套件搭配 `misaki[zh]` 中文 G2P 模組。
 
 ### Rationale
 - Kokoro 有專用中文模型，支援 103 種中文音色
-- kokoro-onnx 提供簡潔 Python API
-- ONNX 格式支援 CPU 推理，量化模型約 80MB
+- 原生 kokoro + misaki[zh] 完整支援繁體中文
+- 模型自動從 HuggingFace 下載（約 327MB）
 - 支援串流輸出，適合即時語音回應
 
 ### Implementation
 
 ```python
-from kokoro_onnx import Kokoro
+from kokoro import KPipeline
 import numpy as np
 
 class KokoroTTS:
-    """Kokoro TTS 中文實作"""
+    """Kokoro TTS 中文實作（使用原生 kokoro + misaki[zh]）"""
 
-    def __init__(self, model_path: str, voices_path: str):
-        self.kokoro = Kokoro(model_path, voices_path)
-        self.voice = "zf_001"  # 中文女聲
+    CHINESE_REPO = "hexgrad/Kokoro-82M-v1.1-zh"
+
+    def __init__(self, model_path: str | None = None, voice: str = "zf_001"):
+        # 設定 HF_HOME 控制模型快取位置
+        if model_path:
+            os.environ["HF_HOME"] = str(Path(model_path).resolve())
+
+        self.pipeline = KPipeline(
+            lang_code="z",  # 中文
+            repo_id=self.CHINESE_REPO,
+        )
+        self.voice = voice
         self.speed = 1.0
+        self.sample_rate = 24000
 
     def tts(self, text: str) -> tuple[int, np.ndarray]:
         """同步生成語音"""
-        samples, sample_rate = self.kokoro.create(
-            text,
-            voice=self.voice,
-            speed=self.speed,
-            lang="zh"
-        )
-        return (sample_rate, samples)
+        generator = self.pipeline(text, voice=self.voice, speed=self.speed)
+        audio_chunks = []
+        for _gs, _ps, audio in generator:
+            if hasattr(audio, "numpy"):
+                audio = audio.numpy()
+            audio_chunks.append(audio)
+        combined = np.concatenate(audio_chunks)
+        return (self.sample_rate, combined.astype(np.float32))
 
-    async def stream_tts(self, text: str):
-        """非同步串流生成"""
-        stream = self.kokoro.create_stream(
-            text,
-            voice=self.voice,
-            speed=self.speed,
-            lang="zh"
-        )
-        async for samples, sample_rate in stream:
-            yield (sample_rate, samples)
+    def stream_tts_sync(self, text: str):
+        """同步串流生成（依標點分段）"""
+        for sentence in self._split_sentences(text):
+            generator = self.pipeline(sentence, voice=self.voice, speed=self.speed)
+            for _gs, _ps, audio in generator:
+                if hasattr(audio, "numpy"):
+                    audio = audio.numpy()
+                yield (self.sample_rate, audio.astype(np.float32))
 ```
 
 ### Model Files
-- `kokoro-v1.0.int8.onnx`（量化模型，約 80MB）
-- `voices-v1.0.bin`（音色檔案）
+模型自動從 HuggingFace 下載至 `HF_HOME` 目錄（預設 `~/.cache/huggingface`）：
+- 可透過 `TTS_MODEL_PATH` 環境變數設定快取位置
+- 預先下載：`uv run python scripts/download_models.py`
 
 ### Chinese Voice Options
 | 前綴 | 說明 |
 |------|------|
-| `zf_*` | 中文女聲（55 種） |
-| `zm_*` | 中文男聲（45 種） |
+| `zf_001` ~ `zf_085` | 中文女聲 |
+| `zm_010` ~ `zm_100` | 中文男聲 |
 
 ### Alternatives Considered
 | 方案 | 說明 | 拒絕原因 |
 |------|------|----------|
+| kokoro-onnx | ONNX 量化模型 | espeak 後端不支援中文 |
 | FastRTC 內建 Kokoro | 預設英文 | 需要中文模型 |
 | Edge TTS | 微軟雲端 | 需網路，增加延遲 |
 | pyttsx3 | 本地 TTS | 音質較差 |
 
 ### References
 - [Kokoro-82M-v1.1-zh on Hugging Face](https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh)
-- [kokoro-onnx GitHub](https://github.com/thewh1teagle/kokoro-onnx)
-- [kokoro-onnx PyPI](https://pypi.org/project/kokoro-onnx/)
+- [kokoro GitHub](https://github.com/hexgrad/kokoro)
+- [misaki GitHub](https://github.com/hexgrad/misaki)
 
 ---
 
@@ -232,18 +245,15 @@ stream.ui.launch(
 |------|------|------|
 | fastrtc | >=0.0.33 | WebRTC 框架 |
 | faster-whisper | >=1.0.0 | 中文 ASR |
-| kokoro-onnx | >=0.4.0 | 中文 TTS（需 Python <3.14） |
+| kokoro | >=0.8.2 | 中文 TTS（原生套件） |
+| misaki[zh] | >=0.8.2 | 中文 G2P（文字轉音素） |
 | openai | >=1.58.x | LLM SDK |
 | pydantic | >=2.10.x | 資料驗證 |
 
 ### 注意事項
-- **kokoro-onnx** 目前要求 Python >=3.10, <3.14
-- 若使用 Python 3.14，需評估替代方案或等待套件更新
-- 建議先以 Python 3.12 或 3.13 開發測試
-
-### 替代方案（若 Python 版本衝突）
-- 直接使用 kokoro 套件（非 ONNX）：`pip install kokoro>=0.8.2 "misaki[zh]>=0.8.2"`
-- 使用 sherpa-onnx：支援 Kokoro 模型且版本相容性更好
+- 使用原生 `kokoro` + `misaki[zh]` 而非 `kokoro-onnx`
+- `kokoro-onnx` 使用 espeak 後端，不支援中文
+- Python 3.13 已測試通過
 
 ---
 
@@ -263,8 +273,8 @@ stream.ui.launch(
 
 所有技術選型已完成研究，無需進一步澄清：
 
-1. **ASR**: faster-whisper tiny 模型，實作 STTModel Protocol
-2. **TTS**: Kokoro-82M-v1.1-zh 中文模型，透過 kokoro-onnx
+1. **ASR**: faster-whisper tiny 模型，實作 STTModel Protocol，重採樣至 16kHz
+2. **TTS**: Kokoro-82M-v1.1-zh 中文模型，透過原生 kokoro + misaki[zh]
 3. **Handler**: FastRTC ReplyOnPause，0.5 秒停頓閾值
 4. **UI**: FastRTC 內建 Gradio WebRTC UI
-5. **Python 版本**: 建議 3.12/3.13（kokoro-onnx 相容性考量）
+5. **Python 版本**: 3.13 已測試通過
