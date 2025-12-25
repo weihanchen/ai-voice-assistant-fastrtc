@@ -5,7 +5,7 @@
 | 項目 | 內容 |
 |------|------|
 | **專案名稱** | AI Voice Assistant (FastRTC) |
-| **技術棧** | Python 3.14+ / uv / FastRTC / OpenAI API / Gradio / Docker |
+| **技術棧** | Python 3.13 / uv / FastRTC / OpenAI API / Gradio / Docker |
 | **開發方法** | Spec-Driven Development (GitHub Spec-Kit) |
 
 ---
@@ -28,8 +28,8 @@
         ▼             ▼             ▼
    ┌─────────┐  ┌──────────┐  ┌─────────┐
    │   ASR   │  │   LLM    │  │   TTS   │
-   │Moonshine│  │ ChatGPT  │  │ Kokoro  │
-   │ (內建)  │  │  + Tools │  │ (內建)  │
+   │ Whisper │  │ ChatGPT  │  │ Kokoro  │
+   │ (中文)  │  │  + Tools │  │ (中文)  │
    └─────────┘  └────┬─────┘  └─────────┘
                      │
         ┌────────────┼────────────┐
@@ -48,8 +48,8 @@
 |------|----------|------|
 | **套件管理** | uv + venv | 快速、現代化的 Python 套件管理 |
 | **容器化** | Docker + Compose v2 | 一致的開發/部署環境 |
-| **語音輸入 (ASR)** | FastRTC 內建 Moonshine | 本地 CPU 推理，免費 |
-| **語音輸出 (TTS)** | FastRTC 內建 Kokoro | 本地 CPU 推理，免費 |
+| **語音輸入 (ASR)** | faster-whisper (tiny) | 本地 CPU 推理，支援中文 |
+| **語音輸出 (TTS)** | Kokoro (kokoro-onnx) | 本地 CPU 推理，中文模型 |
 | **LLM** | OpenAI GPT-4o-mini | 支援 function calling，成本低 |
 | **UI** | Gradio (FastRTC 內建) | 一行啟動 WebRTC UI |
 | **外部 API** | 免費公開 API | 詳見下方 |
@@ -85,12 +85,14 @@
 - 非功能需求 (延遲、可靠性)
 - LLM Client 與 Tool Registry 架構設計
 - 資料結構定義 (ToolResult、ChatMessage)
+- 此階段並非完整功能實作， 僅專案能夠長出骨架並啟動為原則
 
 #### 001 - FastRTC Voice Pipeline (語音管線)
 
+- FastRTC 語音管線，整合 faster-whisper ASR 與 Kokoro TTS（中文）
 - ASR/TTS 需求與品質標準
-- ReplyOnPause 行為定義
-- Moonshine/Kokoro 配置需求
+- ReplyOnPause 行為定義（0.5 秒停頓閾值）
+- faster-whisper/Kokoro 配置需求
 - Gradio UI 整合需求
 
 #### 002 - Weather Query (天氣查詢)
@@ -227,7 +229,7 @@ docker compose down
 ### Dockerfile
 
 ```dockerfile
-FROM python:3.14-slim
+FROM python:3.13-slim
 
 WORKDIR /app
 

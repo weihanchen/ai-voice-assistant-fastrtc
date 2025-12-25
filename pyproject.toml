@@ -2,17 +2,25 @@
 name = "voice-assistant"
 version = "0.1.0"
 description = "AI Voice Assistant with FastRTC"
-requires-python = ">=3.14"
+requires-python = ">=3.13,<3.14"
 dependencies = [
     "openai>=1.58.0",
     "pydantic>=2.10.0",
     "pydantic-settings>=2.0.0",
+    # Voice Pipeline (001-fastrtc-voice-pipeline)
+    "fastrtc>=0.0.33",
+    "faster-whisper>=1.0.0",
+    # 中文 TTS: 使用原生 kokoro + misaki[zh] (research.md 替代方案)
+    "kokoro>=0.8.2",
+    "misaki[zh]>=0.8.2",
+    "soundfile>=0.13.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0.0",
     "pytest-asyncio>=0.24.0",
+    "pytest-mock>=3.14.0",
     "ruff>=0.8.0",
 ]
 
@@ -25,7 +33,7 @@ packages = ["src/voice_assistant"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py314"
+target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

@@ -46,7 +46,7 @@
 
 | 項目 | 技術 | 版本 | 說明 |
 |------|------|------|------|
-| **Python** | Python | 3.14 | 專案指定版本 |
+| **Python** | Python | 3.13 | 專案指定版本（kokoro-onnx 相容性） |
 | **套件管理** | uv | >=0.5.x | 取代 pip/poetry |
 | **虛擬環境** | uv venv | - | 內建於 uv |
 
@@ -55,8 +55,8 @@
 | 項目 | 技術 | 版本 | 說明 |
 |------|------|------|------|
 | **語音框架** | FastRTC | >=0.0.33 | WebRTC 實時通訊 |
-| **ASR** | Moonshine | FastRTC 內建 | 本地 CPU 語音轉文字 |
-| **TTS** | Kokoro | FastRTC 內建 | 本地 CPU 文字轉語音 |
+| **ASR** | faster-whisper | >=1.0.0 | 中文語音轉文字（tiny 模型） |
+| **TTS** | Kokoro | kokoro-onnx >=0.4.0 | 中文文字轉語音（Kokoro-82M-v1.1-zh） |
 | **UI** | Gradio | >=5.x | FastRTC 內建 WebRTC 介面 |
 
 ### LLM & AI
@@ -126,4 +126,8 @@
 
 ---
 
-**Version**: 1.0.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-23
+**Version**: 1.1.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-25
+
+### Changelog
+
+- **v1.1.0** (2025-12-25): Python 3.14→3.13（kokoro-onnx 相容）、ASR Moonshine→faster-whisper（中文支援）、TTS 改用 kokoro-onnx 中文模型
