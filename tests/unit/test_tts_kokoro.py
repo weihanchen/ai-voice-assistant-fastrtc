@@ -41,22 +41,20 @@ class TestKokoroTTSFunctionality:
         """建立 mock KokoroTTS"""
         from voice_assistant.voice.tts.kokoro import KokoroTTS
 
-        # Mock Kokoro
-        mock_kokoro = mocker.MagicMock()
-        mock_kokoro.create.return_value = (
-            np.zeros(24000, dtype=np.float32),
-            24000,
-        )
+        # Mock KPipeline（原生 kokoro 使用的類別）
+        mock_pipeline = mocker.MagicMock()
+        # pipeline() 回傳 generator of (graphemes, phonemes, audio)
+        mock_audio = np.zeros(24000, dtype=np.float32)
+        mock_pipeline.return_value = iter([("g", "p", mock_audio)])
 
         mocker.patch(
-            "voice_assistant.voice.tts.kokoro.Kokoro",
-            return_value=mock_kokoro,
+            "voice_assistant.voice.tts.kokoro.KPipeline",
+            return_value=mock_pipeline,
         )
 
-        return KokoroTTS(
-            model_path="models/kokoro-v1.0.int8.onnx",
-            voices_path="models/voices-v1.0.bin",
-        )
+        tts = KokoroTTS(voice="zf_001")
+        tts.pipeline = mock_pipeline
+        return tts
 
     def test_tts_returns_audio_tuple(self, mock_kokoro_tts):
         """驗證 tts 回傳 (sample_rate, audio_array) tuple"""
@@ -72,16 +70,17 @@ class TestKokoroTTSFunctionality:
         assert sample_rate == 24000
         assert len(audio) == 0
 
-    def test_stream_tts_yields_chunks(self, mock_kokoro_tts, mocker):
+    def test_stream_tts_yields_chunks(self, mock_kokoro_tts):
         """串流生成多個 chunks"""
-        # Mock create for streaming
-        mock_kokoro_tts.kokoro.create.return_value = (
-            np.zeros(24000, dtype=np.float32),
-            24000,
-        )
+        # 重設 mock 以回傳多個 chunk
+        mock_audio = np.zeros(12000, dtype=np.float32)
+        mock_kokoro_tts.pipeline.return_value = iter([
+            ("g1", "p1", mock_audio),
+            ("g2", "p2", mock_audio),
+        ])
 
         chunks = list(mock_kokoro_tts.stream_tts_sync("第一句。第二句。"))
-        # 應該有多個 chunks（依句號分段）
+        # 應該有 chunks
         assert len(chunks) >= 1
         for sample_rate, chunk in chunks:
             assert isinstance(sample_rate, int)

@@ -3,9 +3,12 @@
 測試語音管線狀態轉移與 STT→LLM→TTS 流程。
 """
 
+import asyncio
+
 import numpy as np
 import pytest
 
+from voice_assistant.llm.schemas import ChatMessage
 from voice_assistant.voice.schemas import ConversationState, VoiceState
 
 
@@ -49,7 +52,10 @@ class TestVoicePipeline:
     def mock_llm(self, mocker):
         """Mock LLM Client"""
         llm = mocker.MagicMock()
-        llm.chat.return_value = "這是測試回應。"
+        # chat 是 async 方法，回傳 ChatMessage
+        async def mock_chat(messages):
+            return ChatMessage(role="assistant", content="這是測試回應。")
+        llm.chat = mocker.MagicMock(side_effect=mock_chat)
         return llm
 
     @pytest.fixture
@@ -95,7 +101,11 @@ class TestVoicePipeline:
         """處理音訊會呼叫 LLM"""
         audio = (16000, np.zeros(16000, dtype=np.float32))
         list(pipeline.process_audio(audio))
-        mock_llm.chat.assert_called_once_with("這是測試輸入")
+        # LLM 被呼叫一次，參數是 ChatMessage list
+        mock_llm.chat.assert_called_once()
+        call_args = mock_llm.chat.call_args[0][0]
+        assert len(call_args) == 1
+        assert call_args[0].content == "這是測試輸入"
 
     def test_process_audio_yields_tts_output(self, pipeline):
         """處理音訊會產生 TTS 輸出"""
