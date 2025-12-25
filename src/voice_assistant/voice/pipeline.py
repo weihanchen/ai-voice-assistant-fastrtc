@@ -153,14 +153,22 @@ class VoicePipeline:
             tool_name = tool_call.function["name"]
             try:
                 arguments = json.loads(tool_call.function["arguments"])
-            except json.JSONDecodeError:
-                arguments = {}
+            except json.JSONDecodeError as e:
+                # JSON 解析失敗時，回傳錯誤訊息給 LLM
+                logger.warning(f"[Pipeline] 工具參數 JSON 解析失敗: {e}")
+                tool_message = ChatMessage(
+                    role="tool",
+                    content="Error: 無法解析工具參數",
+                    tool_call_id=tool_call.id,
+                )
+                messages.append(tool_message)
+                continue
 
-            logger.info(f"[Pipeline] 執行工具 {tool_name}: {arguments}")
+            logger.info(f"[Pipeline] 執行工具 {tool_name}")
 
             # 執行工具
             result = await self.tool_registry.execute(tool_name, arguments)
-            logger.info(f"[Pipeline] 工具結果: {result.to_content()[:100]}...")
+            logger.info("[Pipeline] 工具執行完成")
 
             # 加入 tool 結果訊息
             tool_message = ChatMessage(

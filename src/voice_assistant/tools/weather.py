@@ -194,9 +194,7 @@ class WeatherTool(BaseTool):
 
             return response.json()
 
-    async def execute(
-        self, city: str, include_details: bool = False, **kwargs: Any
-    ) -> ToolResult:
+    async def execute(self, city: str, include_details: bool = False) -> ToolResult:
         """
         執行天氣查詢。
 
@@ -210,9 +208,9 @@ class WeatherTool(BaseTool):
         # 解析城市
         resolved = self._resolve_city(city)
         if not resolved:
+            supported = "、".join(TAIWAN_CITIES.keys())
             return ToolResult.fail(
-                "unsupported_city: 目前僅支援台灣主要城市的天氣查詢，"
-                "例如台北、高雄、台中、台南、新北、桃園、基隆、新竹、嘉義、屏東、宜蘭、花蓮、台東"
+                f"unsupported_city: 目前僅支援台灣主要城市的天氣查詢，例如{supported}"
             )
 
         city_name, (lat, lon) = resolved
@@ -224,7 +222,12 @@ class WeatherTool(BaseTool):
 
             # 基本資訊
             temperature = current.get("temperature_2m")
-            weather_code = current.get("weather_code", 0)
+            weather_code = current.get("weather_code")
+
+            # 驗證必要欄位
+            if temperature is None or weather_code is None:
+                return ToolResult.fail("api_error: 無法取得完整天氣資訊，請稍後再試")
+
             weather_desc = self._get_weather_description(weather_code)
 
             result: dict[str, Any] = {
@@ -246,5 +249,5 @@ class WeatherTool(BaseTool):
             return ToolResult.fail("api_timeout: 天氣服務暫時無法使用，請稍後再試")
         except httpx.RequestError:
             return ToolResult.fail("network_error: 網路連線異常，請檢查網路狀態")
-        except ValueError as e:
-            return ToolResult.fail(f"api_error: 無法取得天氣資訊 ({e})")
+        except ValueError:
+            return ToolResult.fail("api_error: 無法取得天氣資訊，請稍後再試")
