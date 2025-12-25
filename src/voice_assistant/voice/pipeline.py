@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from voice_assistant.llm.schemas import ChatMessage
-from voice_assistant.tools import ToolRegistry, WeatherTool
+from voice_assistant.tools import ToolRegistry
 from voice_assistant.voice.schemas import (
     ConversationState,
     VoicePipelineConfig,
@@ -88,14 +88,14 @@ class VoicePipeline:
             llm_client: LLM 客戶端（來自 000 規格）
             stt: STT 實例（可選，預設自動建立）
             tts: TTS 實例（可選，預設自動建立）
-            tool_registry: 工具註冊表（可選，預設自動建立並註冊 WeatherTool）
+            tool_registry: 工具註冊表（可選，預設使用空註冊表）
         """
         self.config = config
         self.llm_client = llm_client
         self.state = ConversationState()
 
-        # 初始化 ToolRegistry（002-weather-query）
-        self.tool_registry = tool_registry or self._create_default_registry()
+        # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
+        self.tool_registry = tool_registry or ToolRegistry()
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(
@@ -113,12 +113,6 @@ class VoicePipeline:
             voice=config.tts.voice,
             speed=config.tts.speed,
         )
-
-    def _create_default_registry(self) -> ToolRegistry:
-        """建立預設的工具註冊表"""
-        registry = ToolRegistry()
-        registry.register(WeatherTool())
-        return registry
 
     async def _process_tool_calls(
         self,
