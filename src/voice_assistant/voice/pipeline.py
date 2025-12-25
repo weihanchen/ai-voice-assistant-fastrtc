@@ -14,7 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from voice_assistant.llm.schemas import ChatMessage
-from voice_assistant.tools import ToolRegistry
+from voice_assistant.tools.registry import ToolRegistry
 from voice_assistant.voice.schemas import (
     ConversationState,
     VoicePipelineConfig,
@@ -95,7 +95,7 @@ class VoicePipeline:
         self.state = ConversationState()
 
         # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
-        self.tool_registry = tool_registry or ToolRegistry()
+        self.tool_registry = ToolRegistry() if tool_registry is None else tool_registry
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(

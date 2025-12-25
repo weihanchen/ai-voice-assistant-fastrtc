@@ -130,8 +130,11 @@ class WeatherTool(BaseTool):
         Returns:
             (標準城市名, (緯度, 經度)) 或 None（不支援的城市）
         """
+        # 基本正規化（處理 STT 常見空白/全形空白）
+        normalized_input = city.strip().replace("\u3000", "")
+
         # 先查詢別名
-        normalized = CITY_ALIASES.get(city, city)
+        normalized = CITY_ALIASES.get(normalized_input, normalized_input)
 
         # 查詢座標
         coords = TAIWAN_CITIES.get(normalized)
@@ -188,11 +191,17 @@ class WeatherTool(BaseTool):
 
         async with httpx.AsyncClient(timeout=API_TIMEOUT) as client:
             response = await client.get(OPEN_METEO_BASE_URL, params=params)
+            response.raise_for_status()
 
-            if response.status_code >= 400:
-                raise ValueError(f"API returned status {response.status_code}")
+            try:
+                payload = response.json()
+            except ValueError as e:
+                raise ValueError("API returned non-JSON response") from e
 
-            return response.json()
+            if not isinstance(payload, dict) or "current" not in payload:
+                raise ValueError("API returned unexpected payload")
+
+            return payload
 
     async def execute(self, city: str, include_details: bool = False) -> ToolResult:
         """
@@ -239,9 +248,18 @@ class WeatherTool(BaseTool):
 
             # 詳細資訊
             if include_details:
-                result["humidity"] = current.get("relative_humidity_2m")
-                result["apparent_temperature"] = current.get("apparent_temperature")
-                result["wind_speed"] = current.get("wind_speed_10m")
+                humidity = current.get("relative_humidity_2m")
+                apparent_temp = current.get("apparent_temperature")
+                wind_speed = current.get("wind_speed_10m")
+
+                if humidity is None or apparent_temp is None or wind_speed is None:
+                    return ToolResult.fail(
+                        "api_error: 無法取得完整詳細天氣資訊，請稍後再試"
+                    )
+
+                result["humidity"] = humidity
+                result["apparent_temperature"] = apparent_temp
+                result["wind_speed"] = wind_speed
 
             return ToolResult.ok(result)
 
