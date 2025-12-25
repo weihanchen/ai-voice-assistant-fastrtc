@@ -59,7 +59,7 @@
 | 功能 | API | 說明 |
 |------|-----|------|
 | **天氣** | [Open-Meteo](https://open-meteo.com/) | 免費，無需 API Key |
-| **匯率** | [Frankfurter](https://www.frankfurter.app/) | 免費，無需 API Key |
+| **匯率** | [ExchangeRate-API](https://www.exchangerate-api.com/) | 免費方案 1,500 次/月，支援 TWD |
 | **股價** | [yfinance](https://pypi.org/project/yfinance/) | 免費 Python 套件 |
 
 ---
@@ -106,7 +106,7 @@
 
 - 使用者故事與換算情境
 - 支援貨幣種類與代碼標準化
-- Frankfurter API 整合需求
+- ExchangeRate-API 整合需求
 - 換算邏輯與成功指標
 
 #### 004 - Stock Price Query (股價查詢)
@@ -281,6 +281,6 @@ services:
 - [FastRTC 官網](https://fastrtc.org/) - 實時通訊框架
 - [FastRTC GitHub](https://github.com/gradio-app/fastrtc) - 原始碼與範例
 - [Open-Meteo API](https://open-meteo.com/) - 天氣 API
-- [Frankfurter API](https://www.frankfurter.app/) - 匯率 API
+- [ExchangeRate-API](https://www.exchangerate-api.com/) - 匯率 API (支援 TWD)
 - [yfinance](https://pypi.org/project/yfinance/) - 股價查詢套件
 - [Docker Compose v2](https://docs.docker.com/compose/) - 容器編排工具
