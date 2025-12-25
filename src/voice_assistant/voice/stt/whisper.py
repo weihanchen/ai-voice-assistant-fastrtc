@@ -21,6 +21,8 @@ class WhisperSTT:
         device: str = "cpu",
         compute_type: str = "int8",
         language: str = "zh",
+        beam_size: int = 5,
+        vad_filter: bool = True,
         min_silence_duration_ms: int = 500,
     ):
         """初始化 Whisper 模型
@@ -30,6 +32,8 @@ class WhisperSTT:
             device: 運算裝置 (cpu/cuda)
             compute_type: 計算精度 (int8/float16/float32)
             language: 目標語言代碼
+            beam_size: Beam search 大小（較大值提升準確度但較慢）
+            vad_filter: 是否啟用 VAD 過濾靜音
             min_silence_duration_ms: VAD 靜音閾值（毫秒）
         """
         self.model = WhisperModel(
@@ -38,6 +42,8 @@ class WhisperSTT:
             compute_type=compute_type,
         )
         self.language = language
+        self.beam_size = beam_size
+        self.vad_filter = vad_filter
         self.min_silence_duration_ms = min_silence_duration_ms
 
     def stt(self, audio: tuple[int, NDArray[np.int16 | np.float32]]) -> str:
@@ -73,12 +79,17 @@ class WhisperSTT:
             audio_array = signal.resample(audio_array, num_samples).astype(np.float32)
 
         # 執行辨識
+        vad_params = (
+            {"min_silence_duration_ms": self.min_silence_duration_ms}
+            if self.vad_filter
+            else None
+        )
         segments, _info = self.model.transcribe(
             audio_array,
             language=self.language,
-            beam_size=5,  # 增加 beam size 提升準確度
-            vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": self.min_silence_duration_ms},
+            beam_size=self.beam_size,
+            vad_filter=self.vad_filter,
+            vad_parameters=vad_params,
         )
 
         # 合併所有片段

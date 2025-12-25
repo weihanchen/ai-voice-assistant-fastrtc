@@ -69,6 +69,8 @@ class VoicePipeline:
             model_size=config.stt.model_size,
             device=config.stt.device,
             language=config.stt.language,
+            beam_size=config.stt.beam_size,
+            vad_filter=config.stt.vad_filter,
             min_silence_duration_ms=config.vad.min_silence_duration_ms,
         )
 
@@ -131,6 +133,10 @@ class VoicePipeline:
             logger.info("[Pipeline] 開始 TTS 串流...")
             chunk_count = 0
             for audio_chunk in self.tts.stream_tts_sync(response):
+                # 檢查是否被中斷
+                if self.state.state == VoiceState.INTERRUPTED:
+                    logger.info("[Pipeline] TTS 被中斷，停止輸出")
+                    break
                 chunk_count += 1
                 yield audio_chunk
             logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")

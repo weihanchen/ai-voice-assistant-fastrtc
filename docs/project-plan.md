@@ -49,7 +49,7 @@
 | **套件管理** | uv + venv | 快速、現代化的 Python 套件管理 |
 | **容器化** | Docker + Compose v2 | 一致的開發/部署環境 |
 | **語音輸入 (ASR)** | faster-whisper (tiny) | 本地 CPU 推理，支援中文 |
-| **語音輸出 (TTS)** | Kokoro (kokoro-onnx) | 本地 CPU 推理，中文模型 |
+| **語音輸出 (TTS)** | Kokoro (kokoro + misaki[zh]) | 本地 CPU 推理，中文模型 |
 | **LLM** | OpenAI GPT-4o-mini | 支援 function calling，成本低 |
 | **UI** | Gradio (FastRTC 內建) | 一行啟動 WebRTC UI |
 | **外部 API** | 免費公開 API | 詳見下方 |

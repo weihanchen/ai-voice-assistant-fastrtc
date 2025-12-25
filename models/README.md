@@ -1,36 +1,30 @@
 # Models Directory
 
-This directory contains model files for ASR and TTS components.
+This directory is used as the HuggingFace cache directory for TTS models.
 
-## Required Model Files
+## Kokoro TTS (Chinese)
 
-### Kokoro TTS (Chinese)
+The project uses the native `kokoro` + `misaki[zh]` packages for Chinese TTS.
+Models are automatically downloaded from HuggingFace on first use.
 
-Download from [kokoro-onnx releases](https://github.com/thewh1teagle/kokoro-onnx/releases):
+**Model**: [hexgrad/Kokoro-82M-v1.1-zh](https://huggingface.co/hexgrad/Kokoro-82M-v1.1-zh) (~327MB)
 
-**Linux/macOS (使用 curl):**
+### Pre-download Models
 
 ```bash
-# Quantized model (~80MB)
-curl -L -o kokoro-v1.0.int8.onnx \
-    https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx
-
-# Voice files
-curl -L -o voices-v1.0.bin \
-    https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin
+# Download models before first run
+uv run python scripts/download_models.py
 ```
 
-**Windows (PowerShell):**
+### Offline Mode
 
-```powershell
-# Quantized model (~80MB)
-Invoke-WebRequest -Uri "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/kokoro-v1.0.int8.onnx" -OutFile "kokoro-v1.0.int8.onnx"
+After downloading, you can run offline:
 
-# Voice files
-Invoke-WebRequest -Uri "https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0/voices-v1.0.bin" -OutFile "voices-v1.0.bin"
+```bash
+export HF_HUB_OFFLINE=1
 ```
 
-### faster-whisper ASR
+## faster-whisper ASR
 
 The `faster-whisper` library automatically downloads models on first use.
 Models are cached in `~/.cache/huggingface/hub/`.
@@ -43,12 +37,12 @@ Default model: `tiny` (~39MB)
 models/
 ├── README.md
 ├── .gitkeep
-├── kokoro-v1.0.int8.onnx    # TTS model (download required)
-└── voices-v1.0.bin          # Voice embeddings (download required)
+└── hub/                # HuggingFace cache (auto-created)
+    └── models--hexgrad--Kokoro-82M-v1.1-zh/
 ```
 
 ## Notes
 
 - Model files are not committed to git (too large)
-- Download models before running the voice assistant
+- Set `TTS_MODEL_PATH=models` in `.env` to use this directory
 - See `.env.example` for model path configuration

@@ -19,7 +19,7 @@
 
 **Purpose**: 專案初始化與相依套件設定
 
-- [x] T001 更新 pyproject.toml 新增 FastRTC、faster-whisper、kokoro-onnx 相依套件
+- [x] T001 更新 pyproject.toml 新增 FastRTC、faster-whisper、kokoro + misaki[zh] 相依套件
 - [x] T002 執行 uv lock 並驗證相依套件解析成功
 - [x] T003 [P] 建立 models/ 目錄並新增 .gitkeep 與 README 說明模型下載方式
 - [x] T004 [P] 更新 .env.example 新增語音管線相關環境變數
@@ -57,7 +57,7 @@
 ### Implementation for User Story 1
 
 - [x] T013 [P] [US1] 實作 src/voice_assistant/voice/stt/whisper.py（WhisperSTT 類別，faster-whisper 整合）
-- [x] T014 [P] [US1] 實作 src/voice_assistant/voice/tts/kokoro.py（KokoroTTS 類別，kokoro-onnx 整合）
+- [x] T014 [P] [US1] 實作 src/voice_assistant/voice/tts/kokoro.py（KokoroTTS 類別，kokoro + misaki[zh] 整合）
 - [x] T015 [US1] 實作 src/voice_assistant/voice/pipeline.py（VoicePipeline 主類別，整合 STT/LLM/TTS）
 - [x] T016 [US1] 建立 src/voice_assistant/voice/handlers/__init__.py 與 reply_on_pause.py（FastRTC ReplyOnPause 處理器整合）
 - [x] T017 [US1] 更新 src/voice_assistant/main.py 整合 FastRTC Stream 與 Gradio UI

@@ -15,7 +15,7 @@
 
 ## Technical Context
 
-**Language/Version**: Python 3.13（依據 Constitution，kokoro-onnx 相容性）
+**Language/Version**: Python 3.13（依據 Constitution）
 **Primary Dependencies**: FastRTC >=0.0.33, faster-whisper, kokoro, openai >=1.58.x, Pydantic >=2.10.x
 **Storage**: N/A（無持久化需求，對話歷史在記憶體中）
 **Testing**: pytest >=8.x, mock 測試
@@ -44,7 +44,7 @@
 | **ASR** | Moonshine（FastRTC 內建） | faster-whisper tiny | Moonshine 不支援中文，faster-whisper 支援且有 FastRTC STTModel Protocol 整合方案 |
 | **TTS** | Kokoro（FastRTC 內建） | Kokoro-82M-v1.1-zh | 需使用中文專用模型，非預設英文模型 |
 
-> ✅ **Constitution 已更新**（v1.1.0）：Python 3.13、ASR 改用 faster-whisper、TTS 改用 kokoro-onnx
+> ✅ **Constitution 已更新**（v1.1.0）：Python 3.13、ASR 改用 faster-whisper、TTS 改用 kokoro + misaki[zh]
 
 ## Project Structure
 
