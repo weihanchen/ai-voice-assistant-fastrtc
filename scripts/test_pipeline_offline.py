@@ -236,8 +236,11 @@ def main():
         # 生成測試音訊
         audio = generate_test_audio(args.text)
 
-        # 儲存生成的音訊
-        output_path = Path(f"tests/fixtures/audio_samples/test_{args.text}.wav")
+        # 儲存生成的音訊（sanitize 檔名避免 path traversal）
+        safe_filename = "".join(
+            c if c.isalnum() or c in "._-" else "_" for c in args.text[:50]
+        )
+        output_path = Path(f"tests/fixtures/audio_samples/test_{safe_filename}.wav")
         save_audio(audio, output_path)
 
     # 重新取樣到目標取樣率

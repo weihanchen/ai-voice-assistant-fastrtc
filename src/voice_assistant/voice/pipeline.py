@@ -106,9 +106,7 @@ class VoicePipeline:
             # 2. LLM 處理
             logger.info(f"[Pipeline] 呼叫 LLM: '{user_text}'")
             user_message = ChatMessage(role="user", content=user_text)
-            llm_response = asyncio.get_event_loop().run_until_complete(
-                self.llm_client.chat([user_message])
-            )
+            llm_response = asyncio.run(self.llm_client.chat([user_message]))
             response = llm_response.content or ""
             logger.info(f"[Pipeline] LLM 回應: '{response}'")
             self.state.last_assistant_text = response
@@ -129,13 +127,12 @@ class VoicePipeline:
             self.state.transition_to(VoiceState.IDLE)
 
         except Exception as e:
-            # 錯誤處理：播放錯誤提示
+            # 錯誤處理：播放錯誤提示，不再重新拋出以維持串流
             logger.error(f"[Pipeline] 處理錯誤: {e}", exc_info=True)
             error_message = "抱歉，處理時發生錯誤，請再試一次。"
             for audio_chunk in self.tts.stream_tts_sync(error_message):
                 yield audio_chunk
             self.state.transition_to(VoiceState.IDLE)
-            raise e
 
     def on_interrupt(self) -> None:
         """處理使用者中斷
