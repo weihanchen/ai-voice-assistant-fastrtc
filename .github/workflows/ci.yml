@@ -19,7 +19,7 @@ jobs:
       - name: 安裝 uv
         uses: astral-sh/setup-uv@v7
         with:
-          python-version: "3.14"
+          python-version: "3.13"
           enable-cache: true
           cache-dependency-glob: "uv.lock"
 
