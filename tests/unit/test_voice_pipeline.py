@@ -51,8 +51,8 @@ class TestVoicePipeline:
         """Mock LLM Client"""
         llm = mocker.MagicMock()
 
-        # chat 是 async 方法，回傳 ChatMessage
-        async def mock_chat(messages):
+        # chat 是 async 方法，回傳 ChatMessage（支援 tools 和 system_prompt 參數）
+        async def mock_chat(messages, tools=None, system_prompt=None):
             return ChatMessage(role="assistant", content="這是測試回應。")
 
         llm.chat = mocker.MagicMock(side_effect=mock_chat)
