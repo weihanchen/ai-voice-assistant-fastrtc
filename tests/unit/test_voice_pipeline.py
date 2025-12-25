@@ -3,8 +3,6 @@
 測試語音管線狀態轉移與 STT→LLM→TTS 流程。
 """
 
-import asyncio
-
 import numpy as np
 import pytest
 

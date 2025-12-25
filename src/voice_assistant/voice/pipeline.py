@@ -84,7 +84,10 @@ class VoicePipeline:
         # 更新狀態為處理中
         self.state.transition_to(VoiceState.PROCESSING)
         sample_rate, audio_array = audio
-        logger.info(f"[Pipeline] 收到音訊: sample_rate={sample_rate}, shape={audio_array.shape}, dtype={audio_array.dtype}")
+        logger.info(
+            f"[Pipeline] 收到音訊: sample_rate={sample_rate}, "
+            f"shape={audio_array.shape}, dtype={audio_array.dtype}"
+        )
 
         try:
             # 1. 語音轉文字
