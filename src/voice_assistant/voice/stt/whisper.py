@@ -63,8 +63,15 @@ class WhisperSTT:
 
         # 確保音訊為 1D (FastRTC 可能傳入多維陣列)
         if audio_array.ndim > 1:
-            # 如果是立體聲，取第一個聲道；如果是批次，flatten
-            audio_array = audio_array.flatten()
+            # 處理多維陣列：取第一個聲道避免 interleaving 破壞音訊
+            # shape (samples, channels) -> 取 [:, 0]
+            # shape (channels, samples) -> 取 [0, :]
+            if audio_array.shape[0] > audio_array.shape[1]:
+                # (samples, channels) 格式
+                audio_array = audio_array[:, 0]
+            else:
+                # (channels, samples) 格式
+                audio_array = audio_array[0, :]
 
         # 正規化為 float32
         if audio_array.dtype == np.int16:
@@ -78,19 +85,17 @@ class WhisperSTT:
             num_samples = int(len(audio_array) * target_sr / sample_rate)
             audio_array = signal.resample(audio_array, num_samples).astype(np.float32)
 
-        # 執行辨識
-        vad_params = (
-            {"min_silence_duration_ms": self.min_silence_duration_ms}
-            if self.vad_filter
-            else None
-        )
-        segments, _info = self.model.transcribe(
-            audio_array,
-            language=self.language,
-            beam_size=self.beam_size,
-            vad_filter=self.vad_filter,
-            vad_parameters=vad_params,
-        )
+        # 執行辨識（條件性建構 kwargs 避免傳遞 None）
+        transcribe_kwargs = {
+            "language": self.language,
+            "beam_size": self.beam_size,
+            "vad_filter": self.vad_filter,
+        }
+        if self.vad_filter:
+            transcribe_kwargs["vad_parameters"] = {
+                "min_silence_duration_ms": self.min_silence_duration_ms
+            }
+        segments, _info = self.model.transcribe(audio_array, **transcribe_kwargs)
 
         # 合併所有片段
         return "".join(segment.text for segment in segments).strip()

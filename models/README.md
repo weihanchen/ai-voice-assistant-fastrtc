@@ -2,6 +2,18 @@
 
 This directory is used as the HuggingFace cache directory for TTS models.
 
+## Configuration
+
+There are two related environment variables:
+
+| Variable | Purpose | Example |
+|----------|---------|---------|
+| `TTS_MODEL_PATH` | Application-level setting (used by voice_assistant) | `models` |
+| `HF_HOME` | HuggingFace cache directory (set automatically by the app) | `models` |
+
+The application reads `TTS_MODEL_PATH` from `.env` and sets `HF_HOME` internally.
+You typically only need to set `TTS_MODEL_PATH`.
+
 ## Kokoro TTS (Chinese)
 
 The project uses the native `kokoro` + `misaki[zh]` packages for Chinese TTS.
@@ -18,9 +30,13 @@ uv run python scripts/download_models.py
 
 ### Offline Mode
 
-After downloading, you can run offline:
+After downloading, you can run offline by setting:
 
 ```bash
+# In .env file
+HF_HUB_OFFLINE=1
+
+# Or as environment variable
 export HF_HUB_OFFLINE=1
 ```
 
@@ -45,4 +61,4 @@ models/
 
 - Model files are not committed to git (too large)
 - Set `TTS_MODEL_PATH=models` in `.env` to use this directory
-- See `.env.example` for model path configuration
+- See `.env.example` for complete configuration options

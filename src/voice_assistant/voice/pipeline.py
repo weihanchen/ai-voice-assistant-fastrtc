@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import concurrent.futures
 import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
@@ -33,6 +34,23 @@ def _truncate_for_log(text: str, max_len: int = _LOG_MAX_TEXT_LEN) -> str:
     if len(text) <= max_len:
         return text
     return text[:max_len] + "..."
+
+
+def _run_async_safely(coro):
+    """安全地執行 async coroutine，處理 nested event loop 情況
+
+    在 Gradio/FastRTC 環境中可能已有 event loop 執行中，
+    此函式會偵測並使用適當的方式執行 coroutine。
+    """
+    try:
+        asyncio.get_running_loop()
+        # 已有執行中的 loop，使用 thread pool 避免 nested loop 錯誤
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            future = pool.submit(asyncio.run, coro)
+            return future.result()
+    except RuntimeError:
+        # 沒有執行中的 loop，直接使用 asyncio.run()
+        return asyncio.run(coro)
 
 
 if TYPE_CHECKING:
@@ -120,7 +138,7 @@ class VoicePipeline:
             # 2. LLM 處理
             logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
-            llm_response = asyncio.run(self.llm_client.chat([user_message]))
+            llm_response = _run_async_safely(self.llm_client.chat([user_message]))
             response = llm_response.content or ""
             logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
             self.state.last_assistant_text = response
@@ -132,14 +150,23 @@ class VoicePipeline:
             # 4. TTS 串流輸出
             logger.info("[Pipeline] 開始 TTS 串流...")
             chunk_count = 0
+            interrupted = False
             for audio_chunk in self.tts.stream_tts_sync(response):
-                # 檢查是否被中斷
-                if self.state.state == VoiceState.INTERRUPTED:
+                # 檢查是否被中斷（僅當 can_interrupt 啟用時）
+                if (
+                    self.config.can_interrupt
+                    and self.state.state == VoiceState.INTERRUPTED
+                ):
                     logger.info("[Pipeline] TTS 被中斷，停止輸出")
+                    interrupted = True
                     break
                 chunk_count += 1
                 yield audio_chunk
-            logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")
+
+            if interrupted:
+                logger.info(f"[Pipeline] TTS 中斷於第 {chunk_count} 個音訊片段")
+            else:
+                logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")
 
             # 5. 回應完成，回到待命
             self.state.transition_to(VoiceState.IDLE)
@@ -148,9 +175,13 @@ class VoicePipeline:
             # 錯誤處理：播放錯誤提示，不再重新拋出以維持串流
             logger.error(f"[Pipeline] 處理錯誤: {e}", exc_info=True)
             error_message = "抱歉，處理時發生錯誤，請再試一次。"
-            for audio_chunk in self.tts.stream_tts_sync(error_message):
-                yield audio_chunk
-            self.state.transition_to(VoiceState.IDLE)
+            try:
+                for audio_chunk in self.tts.stream_tts_sync(error_message):
+                    yield audio_chunk
+            except Exception as tts_error:
+                logger.error(f"[Pipeline] 錯誤訊息 TTS 失敗: {tts_error}")
+            finally:
+                self.state.transition_to(VoiceState.IDLE)
 
     def on_interrupt(self) -> None:
         """處理使用者中斷
