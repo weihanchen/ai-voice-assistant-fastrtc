@@ -103,9 +103,7 @@ class KokoroTTS:
         combined = np.concatenate(audio_chunks)
         return (self.sample_rate, combined.astype(np.float32))
 
-    def stream_tts_sync(
-        self, text: str
-    ) -> Iterator[tuple[int, NDArray[np.float32]]]:
+    def stream_tts_sync(self, text: str) -> Iterator[tuple[int, NDArray[np.float32]]]:
         """同步串流生成語音
 
         分段生成音訊，適合即時播放。

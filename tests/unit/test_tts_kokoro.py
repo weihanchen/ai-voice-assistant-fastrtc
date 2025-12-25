@@ -74,10 +74,12 @@ class TestKokoroTTSFunctionality:
         """串流生成多個 chunks"""
         # 重設 mock 以回傳多個 chunk
         mock_audio = np.zeros(12000, dtype=np.float32)
-        mock_kokoro_tts.pipeline.return_value = iter([
-            ("g1", "p1", mock_audio),
-            ("g2", "p2", mock_audio),
-        ])
+        mock_kokoro_tts.pipeline.return_value = iter(
+            [
+                ("g1", "p1", mock_audio),
+                ("g2", "p2", mock_audio),
+            ]
+        )
 
         chunks = list(mock_kokoro_tts.stream_tts_sync("第一句。第二句。"))
         # 應該有 chunks

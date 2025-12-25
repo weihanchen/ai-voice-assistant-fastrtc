@@ -64,9 +64,7 @@ class TranscribedText(BaseModel):
 class TTSConfig(BaseModel):
     """TTS 配置"""
 
-    model_path: str = Field(
-        default="models", description="模型快取目錄（HF_HOME）"
-    )
+    model_path: str = Field(default="models", description="模型快取目錄（HF_HOME）")
     voice: str = Field(
         default="zf_001", description="音色 ID (zf_* 中文女聲, zm_* 中文男聲)"
     )
