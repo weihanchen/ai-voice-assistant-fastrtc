@@ -42,6 +42,7 @@ def create_voice_stream(settings: Settings) -> Stream:
             "pause_threshold_ms": settings.vad_pause_threshold_ms,
             "min_speech_duration_ms": settings.vad_min_speech_duration_ms,
             "speech_threshold": settings.vad_speech_threshold,
+            "min_silence_duration_ms": settings.vad_min_silence_duration_ms,
         },
         can_interrupt=True,
         server_host=settings.server_host,

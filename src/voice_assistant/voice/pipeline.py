@@ -24,6 +24,17 @@ from voice_assistant.voice.tts.kokoro import KokoroTTS
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+# Log 敏感資料最大長度（避免洩露 PII）
+_LOG_MAX_TEXT_LEN = 50
+
+
+def _truncate_for_log(text: str, max_len: int = _LOG_MAX_TEXT_LEN) -> str:
+    """截斷文字用於 log，避免敏感資料外洩"""
+    if len(text) <= max_len:
+        return text
+    return text[:max_len] + "..."
+
+
 if TYPE_CHECKING:
     from voice_assistant.llm.client import LLMClient
 
@@ -58,6 +69,7 @@ class VoicePipeline:
             model_size=config.stt.model_size,
             device=config.stt.device,
             language=config.stt.language,
+            min_silence_duration_ms=config.vad.min_silence_duration_ms,
         )
 
         # 初始化 TTS（model_path 為 HF_HOME 快取目錄）
@@ -93,7 +105,7 @@ class VoicePipeline:
             # 1. 語音轉文字
             logger.info("[Pipeline] 開始 STT 辨識...")
             user_text = self.stt.stt(audio)
-            logger.info(f"[Pipeline] STT 結果: '{user_text}'")
+            logger.info(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
 
             if not user_text.strip():
                 # 無有效輸入，回到待命
@@ -104,11 +116,11 @@ class VoicePipeline:
             self.state.last_user_text = user_text
 
             # 2. LLM 處理
-            logger.info(f"[Pipeline] 呼叫 LLM: '{user_text}'")
+            logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
             llm_response = asyncio.run(self.llm_client.chat([user_message]))
             response = llm_response.content or ""
-            logger.info(f"[Pipeline] LLM 回應: '{response}'")
+            logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
             self.state.last_assistant_text = response
 
             # 3. 更新狀態為回應中

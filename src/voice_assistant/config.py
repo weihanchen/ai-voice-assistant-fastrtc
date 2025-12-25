@@ -26,6 +26,7 @@ class Settings(BaseSettings):
     vad_pause_threshold_ms: int = 500
     vad_min_speech_duration_ms: int = 250
     vad_speech_threshold: float = 0.5
+    vad_min_silence_duration_ms: int = 500  # Whisper VAD 靜音閾值
 
     # Server
     server_host: str = "0.0.0.0"

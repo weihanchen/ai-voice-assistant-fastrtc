@@ -21,6 +21,7 @@ class WhisperSTT:
         device: str = "cpu",
         compute_type: str = "int8",
         language: str = "zh",
+        min_silence_duration_ms: int = 500,
     ):
         """初始化 Whisper 模型
 
@@ -29,6 +30,7 @@ class WhisperSTT:
             device: 運算裝置 (cpu/cuda)
             compute_type: 計算精度 (int8/float16/float32)
             language: 目標語言代碼
+            min_silence_duration_ms: VAD 靜音閾值（毫秒）
         """
         self.model = WhisperModel(
             model_size,
@@ -36,6 +38,7 @@ class WhisperSTT:
             compute_type=compute_type,
         )
         self.language = language
+        self.min_silence_duration_ms = min_silence_duration_ms
 
     def stt(self, audio: tuple[int, NDArray[np.int16 | np.float32]]) -> str:
         """將音訊轉換為文字
@@ -75,7 +78,7 @@ class WhisperSTT:
             language=self.language,
             beam_size=5,  # 增加 beam size 提升準確度
             vad_filter=True,
-            vad_parameters={"min_silence_duration_ms": 500},
+            vad_parameters={"min_silence_duration_ms": self.min_silence_duration_ms},
         )
 
         # 合併所有片段

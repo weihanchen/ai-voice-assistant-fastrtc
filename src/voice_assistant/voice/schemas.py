@@ -123,6 +123,9 @@ class VADConfig(BaseModel):
     pause_threshold_ms: int = Field(default=500, description="停頓閾值 (毫秒)")
     min_speech_duration_ms: int = Field(default=250, description="最小語音時長")
     speech_threshold: float = Field(default=0.5, description="語音偵測閾值")
+    min_silence_duration_ms: int = Field(
+        default=500, description="Whisper VAD 靜音閾值 (毫秒)"
+    )
 
 
 class VoicePipelineConfig(BaseModel):
