@@ -5,6 +5,7 @@
 
 import asyncio
 import concurrent.futures
+import json
 import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
@@ -13,6 +14,7 @@ import numpy as np
 from numpy.typing import NDArray
 
 from voice_assistant.llm.schemas import ChatMessage
+from voice_assistant.tools import ToolRegistry, WeatherTool
 from voice_assistant.voice.schemas import (
     ConversationState,
     VoicePipelineConfig,
@@ -63,12 +65,20 @@ class VoicePipeline:
     整合 STT、LLM、TTS 實現完整語音對話流程。
     """
 
+    # 系統提示詞
+    SYSTEM_PROMPT = (
+        "你是一個友善的 AI 語音助理。請用繁體中文回答，回答要簡潔、口語化，適合語音輸出。"
+        "當使用者詢問天氣相關問題時，請使用 get_weather 工具查詢天氣資訊。"
+        "根據工具回傳的資料，用自然的口語回應使用者。"
+    )
+
     def __init__(
         self,
         config: VoicePipelineConfig,
         llm_client: "LLMClient",
         stt: WhisperSTT | None = None,
         tts: KokoroTTS | None = None,
+        tool_registry: ToolRegistry | None = None,
     ):
         """初始化語音管線
 
@@ -77,10 +87,14 @@ class VoicePipeline:
             llm_client: LLM 客戶端（來自 000 規格）
             stt: STT 實例（可選，預設自動建立）
             tts: TTS 實例（可選，預設自動建立）
+            tool_registry: 工具註冊表（可選，預設自動建立並註冊 WeatherTool）
         """
         self.config = config
         self.llm_client = llm_client
         self.state = ConversationState()
+
+        # 初始化 ToolRegistry（002-weather-query）
+        self.tool_registry = tool_registry or self._create_default_registry()
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(
@@ -98,6 +112,69 @@ class VoicePipeline:
             voice=config.tts.voice,
             speed=config.tts.speed,
         )
+
+    def _create_default_registry(self) -> ToolRegistry:
+        """建立預設的工具註冊表"""
+        registry = ToolRegistry()
+        registry.register(WeatherTool())
+        return registry
+
+    async def _process_tool_calls(
+        self,
+        messages: list[ChatMessage],
+        llm_response: ChatMessage,
+        tools: list[dict],
+    ) -> str:
+        """處理 LLM 的 Tool Calls 回應
+
+        Args:
+            messages: 目前的對話訊息列表
+            llm_response: LLM 回應（可能包含 tool_calls）
+            tools: 工具定義列表
+
+        Returns:
+            最終的文字回應
+        """
+        # 如果沒有 tool_calls，直接回傳內容
+        if not llm_response.tool_calls:
+            return llm_response.content or ""
+
+        logger.info(
+            f"[Pipeline] LLM 要求呼叫工具: "
+            f"{[tc.function['name'] for tc in llm_response.tool_calls]}"
+        )
+
+        # 加入 assistant 訊息（包含 tool_calls）
+        messages.append(llm_response)
+
+        # 執行每個 tool call
+        for tool_call in llm_response.tool_calls:
+            tool_name = tool_call.function["name"]
+            try:
+                arguments = json.loads(tool_call.function["arguments"])
+            except json.JSONDecodeError:
+                arguments = {}
+
+            logger.info(f"[Pipeline] 執行工具 {tool_name}: {arguments}")
+
+            # 執行工具
+            result = await self.tool_registry.execute(tool_name, arguments)
+            logger.info(f"[Pipeline] 工具結果: {result.to_content()[:100]}...")
+
+            # 加入 tool 結果訊息
+            tool_message = ChatMessage(
+                role="tool",
+                content=result.to_content(),
+                tool_call_id=tool_call.id,
+            )
+            messages.append(tool_message)
+
+        # 再次呼叫 LLM 產生最終回應
+        final_response = await self.llm_client.chat(
+            messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+        )
+
+        return final_response.content or ""
 
     def process_audio(
         self,
@@ -135,11 +212,25 @@ class VoicePipeline:
 
             self.state.last_user_text = user_text
 
-            # 2. LLM 處理
+            # 2. LLM 處理（含 Tool Calling）
             logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
-            llm_response = _run_async_safely(self.llm_client.chat([user_message]))
-            response = llm_response.content or ""
+            messages = [user_message]
+
+            # 取得工具定義
+            tools = self.tool_registry.get_openai_tools()
+
+            # 第一次 LLM 呼叫
+            llm_response = _run_async_safely(
+                self.llm_client.chat(
+                    messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+                )
+            )
+
+            # 處理 Tool Calls（如果有）
+            response = _run_async_safely(
+                self._process_tool_calls(messages, llm_response, tools)
+            )
             logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
             self.state.last_assistant_text = response
 
