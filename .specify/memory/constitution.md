@@ -71,7 +71,7 @@
 | 功能 | API | 條件 |
 |------|-----|------|
 | **天氣** | Open-Meteo | 免費，無需 API Key |
-| **匯率** | Frankfurter | 免費，無需 API Key |
+| **匯率** | ExchangeRate-API | 免費，無需 API Key，支援 TWD |
 | **股價** | yfinance | 免費 Python 套件 |
 
 ### Development Tools

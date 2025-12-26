@@ -2,7 +2,7 @@
 
 ## Overview
 
-`ExchangeRateTool` 是匯率查詢工具，透過 Frankfurter API 提供即時匯率查詢與貨幣換算功能。
+`ExchangeRateTool` 是匯率查詢工具，透過 ExchangeRate-API 提供即時匯率查詢與貨幣換算功能。
 
 ## Class Definition
 
@@ -126,7 +126,7 @@ async def _fetch_exchange_rate(
     amount: float = 1.0
 ) -> dict:
     """
-    呼叫 Frankfurter API 查詢匯率。
+    呼叫 ExchangeRate-API 查詢匯率。
 
     Args:
         from_code: 來源貨幣代碼
@@ -197,10 +197,10 @@ def to_openai_tool(self) -> dict:
 
 ## Constants
 
-### FRANKFURTER_BASE_URL
+### EXCHANGE_RATE_API_BASE_URL
 
 ```python
-FRANKFURTER_BASE_URL = "https://api.frankfurter.app"
+EXCHANGE_RATE_API_BASE_URL = "https://open.er-api.com/v6/latest"
 ```
 
 ### API_TIMEOUT

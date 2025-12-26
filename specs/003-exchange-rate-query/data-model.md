@@ -52,13 +52,14 @@
 **API Response Mapping**:
 
 ```json
-// Frankfurter API Response
+// ExchangeRate-API Response
 {
-  "amount": 1,
-  "base": "USD",
-  "date": "2025-12-26",
+  "result": "success",
+  "base_code": "USD",
+  "time_last_update_utc": "Thu, 26 Dec 2024 00:02:31 +0000",
   "rates": {
-    "TWD": 32.5
+    "TWD": 32.58,
+    "JPY": 157.25
   }
 }
 ```
@@ -68,8 +69,8 @@
 ExchangeRateData(
     base="USD",
     target="TWD",
-    rate=32.5,
-    date="2025-12-26"
+    rate=32.58,
+    date="2024-12-26"
 )
 ```
 

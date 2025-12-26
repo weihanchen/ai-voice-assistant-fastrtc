@@ -5,7 +5,7 @@
 
 ## Summary
 
-實作匯率查詢工具，讓使用者可透過語音詢問貨幣匯率並進行金額換算。採用 Frankfurter API（免費、無需 API Key）查詢即時匯率，以新台幣（TWD）為基準貨幣，支援 8 種常用國際貨幣的雙向換算。
+實作匯率查詢工具，讓使用者可透過語音詢問貨幣匯率並進行金額換算。採用 ExchangeRate-API（免費、無需 API Key、支援 TWD）查詢即時匯率，以新台幣（TWD）為基準貨幣，支援 8 種常用國際貨幣的雙向換算。
 
 ## Technical Context
 
@@ -30,7 +30,7 @@
 | **Human-Friendly Response** | 匯率回應經 LLM 轉換為口語化繁體中文 | ✅ 符合 |
 | **Safe Boundary** | 匯率換算在定義範圍內，失敗時誠實告知 | ✅ 符合 |
 | **Extensible Design** | 遵循 ToolRegistry 機制，新增工具無需修改核心 | ✅ 符合 |
-| **技術規範** | 使用 Frankfurter API（Constitution 指定） | ✅ 符合 |
+| **技術規範** | 使用 ExchangeRate-API（支援 TWD） | ✅ 符合 |
 
 ## Project Structure
 

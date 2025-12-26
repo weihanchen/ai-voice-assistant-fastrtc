@@ -127,11 +127,11 @@ asyncio.run(test())
 
 ### Q: 為什麼匯率不是最新的？
 
-Frankfurter API 使用歐洲中央銀行資料，僅於工作日更新。週末查詢會取得上一個工作日的匯率。
+ExchangeRate-API 每日更新一次（UTC 00:00 左右）。查詢會取得最近一次更新的匯率。
 
 ### Q: 如何新增更多貨幣？
 
-在 `CURRENCY_ALIASES` 和 `CURRENCY_NAMES` 字典中新增對應項目。確保 Frankfurter API 支援該貨幣代碼。
+在 `CURRENCY_ALIASES` 和 `CURRENCY_NAMES` 字典中新增對應項目。ExchangeRate-API 支援 150+ 種貨幣。
 
 ### Q: API 逾時怎麼處理？
 

@@ -1,48 +1,66 @@
 # Research: Exchange Rate Query Tool
 
-## 1. Frankfurter API 研究
+## 1. ExchangeRate-API 研究
 
 ### Decision
-使用 Frankfurter API 作為匯率資料來源。
+使用 ExchangeRate-API (Open Access) 作為匯率資料來源。
 
 ### Rationale
-- **Constitution 指定**：專案憲章明確規定匯率功能使用 Frankfurter API
-- **免費且無需 API Key**：降低部署複雜度
-- **支援 TWD**：支援新台幣作為基準貨幣
-- **穩定可靠**：由歐洲中央銀行資料支援
+- **支援 TWD**：確認支援新台幣（已實測驗證）
+- **免費且無需 API Key**：Open Access 端點無需註冊
+- **穩定可靠**：提供 150+ 種貨幣的即時匯率
 
 ### API Details
 
-**Base URL**: `https://api.frankfurter.app`
+**Base URL**: `https://open.er-api.com/v6/latest`
 
 **端點**:
 
 | 端點 | 說明 | 範例 |
 |------|------|------|
-| `/latest` | 最新匯率 | `/latest?from=USD&to=TWD` |
-| `/latest?amount=N` | 指定金額換算 | `/latest?amount=100&from=USD&to=TWD` |
+| `/latest/{base}` | 取得指定貨幣對所有貨幣的匯率 | `/latest/USD` |
 
 **回應格式**:
 ```json
 {
-  "amount": 1,
-  "base": "USD",
-  "date": "2025-12-26",
+  "result": "success",
+  "provider": "https://www.exchangerate-api.com",
+  "documentation": "https://www.exchangerate-api.com/docs/free",
+  "terms_of_use": "https://www.exchangerate-api.com/terms",
+  "time_last_update_unix": 1735171351,
+  "time_last_update_utc": "Thu, 26 Dec 2024 00:02:31 +0000",
+  "time_next_update_unix": 1735259071,
+  "time_next_update_utc": "Fri, 27 Dec 2024 00:24:31 +0000",
+  "base_code": "USD",
   "rates": {
-    "TWD": 32.5
+    "TWD": 32.58,
+    "JPY": 157.25,
+    "EUR": 0.96,
+    ...
   }
 }
 ```
 
-**支援貨幣**: USD, EUR, JPY, GBP, AUD, CNY, HKD, KRW 等主要貨幣（完整清單見 `/currencies`）
+**支援貨幣**: USD, EUR, JPY, GBP, AUD, CNY, HKD, KRW, TWD 等 150+ 種貨幣
+
+**實測驗證**:
+```bash
+curl "https://open.er-api.com/v6/latest/USD"
+# 回應包含 "TWD": 32.58（實際值）
+```
 
 ### Alternatives Considered
 
 | API | 優點 | 缺點 | 結論 |
 |-----|------|------|------|
-| ExchangeRate-API | 更多貨幣 | 需要 API Key（免費版有限制） | ❌ 不採用 |
+| Frankfurter | 免費、無需 Key | **不支援 TWD** | ❌ 不採用 |
 | Open Exchange Rates | 豐富功能 | 需要 API Key | ❌ 不採用 |
-| Frankfurter | 免費、無需 Key、Constitution 指定 | 僅工作日更新 | ✅ 採用 |
+| ExchangeRate-API | 免費、無需 Key、**支援 TWD** | 每日更新 | ✅ 採用 |
+
+### 注意事項
+
+- Open Access 版本有速率限制，建議每 24 小時查詢一次以避免限制
+- 可快取匯率資料 5-10 分鐘以減少 API 呼叫
 
 ---
 
@@ -131,7 +149,21 @@ CURRENCY_NAMES: dict[str, str] = {
 - 支援雙向換算（USD→TWD 和 TWD→USD）
 - 簡化 LLM 的 Function Calling 參數
 
-### API Design
+### API 呼叫策略
+
+由於 ExchangeRate-API 只提供 `/latest/{base}` 端點，換算邏輯如下：
+
+```python
+# 查詢 USD → TWD
+response = await client.get(f"{BASE_URL}/latest/USD")
+rate = response["rates"]["TWD"]  # 例如 32.58
+
+# 查詢 TWD → USD（需要反向計算）
+response = await client.get(f"{BASE_URL}/latest/TWD")
+rate = response["rates"]["USD"]  # 例如 0.0307
+```
+
+### Tool Execute Signature
 
 ```python
 async def execute(
@@ -205,17 +237,23 @@ async def execute(
 ### Mock Data
 
 ```python
-MOCK_EXCHANGE_RATE_USD_TWD = {
-    "amount": 1,
-    "base": "USD",
-    "date": "2025-12-26",
-    "rates": {"TWD": 32.5}
+MOCK_EXCHANGE_RATE_USD = {
+    "result": "success",
+    "base_code": "USD",
+    "rates": {
+        "TWD": 32.58,
+        "JPY": 157.25,
+        "EUR": 0.96,
+    }
 }
 
-MOCK_EXCHANGE_RATE_JPY_TWD = {
-    "amount": 1,
-    "base": "JPY",
-    "date": "2025-12-26",
-    "rates": {"TWD": 0.22}
+MOCK_EXCHANGE_RATE_TWD = {
+    "result": "success",
+    "base_code": "TWD",
+    "rates": {
+        "USD": 0.0307,
+        "JPY": 4.83,
+        "EUR": 0.029,
+    }
 }
 ```
