@@ -24,6 +24,7 @@ class WhisperSTT:
         beam_size: int = 5,
         vad_filter: bool = True,
         min_silence_duration_ms: int = 500,
+        model_path: str | None = None,
     ):
         """初始化 Whisper 模型
 
@@ -35,11 +36,13 @@ class WhisperSTT:
             beam_size: Beam search 大小（較大值提升準確度但較慢）
             vad_filter: 是否啟用 VAD 過濾靜音
             min_silence_duration_ms: VAD 靜音閾值（毫秒）
+            model_path: 模型快取目錄（預設使用系統快取）
         """
         self.model = WhisperModel(
             model_size,
             device=device,
             compute_type=compute_type,
+            download_root=model_path,
         )
         self.language = language
         self.beam_size = beam_size

@@ -100,6 +100,7 @@ class VoicePipeline:
         # 初始化 STT
         self.stt = stt or WhisperSTT(
             model_size=config.stt.model_size,
+            model_path=config.stt.model_path,
             device=config.stt.device,
             language=config.stt.language,
             beam_size=config.stt.beam_size,

@@ -7,6 +7,7 @@ Auto-generated from feature plans. Last updated: 2025-12-25
 - Python 3.13 + OpenAI SDK + Pydantic (000-ai-voice-assistant)
 - FastRTC + faster-whisper + Kokoro TTS (001-fastrtc-voice-pipeline)
 - httpx + Open-Meteo API (002-weather-query)
+- httpx + ExchangeRate-API (003-exchange-rate-query)
 
 ## Project Structure
 
@@ -22,7 +23,8 @@ src/
     │   ├── base.py          # BaseTool
     │   ├── registry.py      # ToolRegistry
     │   ├── schemas.py       # ToolResult
-    │   └── weather.py       # WeatherTool (002)
+    │   ├── weather.py       # WeatherTool (002)
+    │   └── exchange_rate.py # ExchangeRateTool (003)
     └── voice/               # 語音管線模組 (001)
         ├── pipeline.py      # VoicePipeline
         ├── stt/             # 語音轉文字
@@ -85,6 +87,7 @@ uv run ruff format .
 
 ## Recent Changes
 
+- 003-exchange-rate-query: 匯率查詢工具（httpx + ExchangeRate-API）✅ 實作完成
 - 002-weather-query: 天氣查詢工具（httpx + Open-Meteo API）✅ 實作完成
 - 001-fastrtc-voice-pipeline: 語音管線（FastRTC + faster-whisper + Kokoro TTS）✅ 實作完成
 - 000-ai-voice-assistant: 核心架構骨架（LLMClient, ToolRegistry）
@@ -93,6 +96,7 @@ uv run ruff format .
 
 | Feature | Status | Description |
 |---------|--------|-------------|
+| 003-exchange-rate-query | ✅ Complete | 匯率查詢工具（ExchangeRateTool, ExchangeRate-API, 31 tests passed） |
 | 002-weather-query | ✅ Complete | 天氣查詢工具（WeatherTool, Open-Meteo API, 24 tests passed） |
 | 001-fastrtc-voice-pipeline | ✅ Complete | 語音管線 MVP（中文 ASR/TTS、ReplyOnPause、中斷支援） |
 | 000-ai-voice-assistant | 🔄 Pending | 核心架構（LLMClient, ToolRegistry）|
