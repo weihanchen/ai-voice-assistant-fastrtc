@@ -121,8 +121,11 @@ class ExchangeRateTool(BaseTool):
         # 基本正規化（處理 STT 常見空白/全形空白）
         normalized_input = currency.strip().replace("\u3000", "")
 
-        # 查詢別名對照表
-        return CURRENCY_ALIASES.get(normalized_input)
+        # 查詢別名對照表（先嘗試原始輸入，再嘗試大寫）
+        result = CURRENCY_ALIASES.get(normalized_input)
+        if result is None:
+            result = CURRENCY_ALIASES.get(normalized_input.upper())
+        return result
 
     async def _fetch_exchange_rate(self, base_code: str) -> dict[str, Any]:
         """
@@ -179,6 +182,12 @@ class ExchangeRateTool(BaseTool):
         Returns:
             ToolResult: 成功時包含匯率資料，失敗時包含錯誤訊息
         """
+        # 型別轉換（LLM 可能傳入字串）
+        try:
+            amount = float(amount)
+        except (ValueError, TypeError):
+            return ToolResult.fail("invalid_amount: 請提供有效的金額")
+
         # 驗證金額
         if amount <= 0:
             return ToolResult.fail("invalid_amount: 請提供有效的金額")
@@ -208,9 +217,17 @@ class ExchangeRateTool(BaseTool):
             data = await self._fetch_exchange_rate(from_code)
             rates = data.get("rates", {})
 
+            # 驗證 rates 是字典
+            if not isinstance(rates, dict):
+                return ToolResult.fail("api_error: 無法取得匯率資訊，請稍後再試")
+
             # 取得匯率
             rate = rates.get(to_code)
             if rate is None:
+                return ToolResult.fail("api_error: 無法取得匯率資訊，請稍後再試")
+
+            # 驗證 rate 是數值類型
+            if not isinstance(rate, int | float):
                 return ToolResult.fail("api_error: 無法取得匯率資訊，請稍後再試")
 
             # 計算換算結果
@@ -229,6 +246,8 @@ class ExchangeRateTool(BaseTool):
 
         except httpx.TimeoutException:
             return ToolResult.fail("api_timeout: 匯率服務暫時無法使用，請稍後再試")
+        except httpx.HTTPStatusError:
+            return ToolResult.fail("api_error: 匯率服務暫時無法使用，請稍後再試")
         except httpx.RequestError:
             return ToolResult.fail("network_error: 網路連線異常，請檢查網路狀態")
         except ValueError:
