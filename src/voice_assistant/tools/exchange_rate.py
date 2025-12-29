@@ -118,8 +118,18 @@ class ExchangeRateTool(BaseTool):
         Returns:
             ISO 4217 代碼，或 None 表示不支援
         """
-        # 基本正規化（處理 STT 常見空白/全形空白）
-        normalized_input = currency.strip().replace("\u3000", "")
+        # 型別檢查（防止 LLM 傳入非字串）
+        if not isinstance(currency, str):
+            return None
+
+        # 基本正規化（處理 STT 常見空白/全形空白/連字符）
+        normalized_input = (
+            currency.strip()
+            .replace("\u3000", "")
+            .replace(" ", "")
+            .replace("-", "")
+            .replace("_", "")
+        )
 
         # 查詢別名對照表（先嘗試原始輸入，再嘗試大寫）
         result = CURRENCY_ALIASES.get(normalized_input)
@@ -182,8 +192,10 @@ class ExchangeRateTool(BaseTool):
         Returns:
             ToolResult: 成功時包含匯率資料，失敗時包含錯誤訊息
         """
-        # 型別轉換（LLM 可能傳入字串）
+        # 型別轉換（LLM 可能傳入字串或帶逗號格式）
         try:
+            if isinstance(amount, str):
+                amount = amount.strip().replace(",", "").replace("，", "")
             amount = float(amount)
         except (ValueError, TypeError):
             return ToolResult.fail("invalid_amount: 請提供有效的金額")
@@ -226,8 +238,8 @@ class ExchangeRateTool(BaseTool):
             if rate is None:
                 return ToolResult.fail("api_error: 無法取得匯率資訊，請稍後再試")
 
-            # 驗證 rate 是數值類型
-            if not isinstance(rate, int | float):
+            # 驗證 rate 是數值類型（排除 bool，因為 bool 是 int 的子類）
+            if isinstance(rate, bool) or not isinstance(rate, int | float) or rate <= 0:
                 return ToolResult.fail("api_error: 無法取得匯率資訊，請稍後再試")
 
             # 計算換算結果

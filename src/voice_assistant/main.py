@@ -59,9 +59,10 @@ def main() -> None:
         settings = get_settings()
 
         # 設定 HF_HOME（必須在 import kokoro 前設定）
-        # 這確保 TTS 模型從正確的目錄載入
+        # 使用 setdefault 避免覆蓋已存在的環境變數設定
         tts_model_path = Path(settings.tts_model_path).resolve()
-        os.environ["HF_HOME"] = str(tts_model_path)
+        tts_model_path.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(tts_model_path))
 
         from voice_assistant.voice.handlers import create_voice_stream
 
