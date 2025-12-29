@@ -13,7 +13,8 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o-mini"
 
     # STT (Speech-to-Text)
-    whisper_model_size: str = "tiny"
+    whisper_model_size: str = "small"
+    whisper_model_path: str = "models/whisper"  # 模型快取目錄
     whisper_device: str = "cpu"
     whisper_language: str = "zh"
 
@@ -35,6 +36,7 @@ class Settings(BaseSettings):
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
+        "extra": "ignore",  # 忽略未定義的環境變數（如 HF_HUB_OFFLINE）
     }
 
 

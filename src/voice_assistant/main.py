@@ -46,10 +46,26 @@ def main() -> None:
     atexit.register(_force_exit)
 
     try:
+        from pathlib import Path
+
+        from dotenv import load_dotenv
+
+        # 載入 .env 環境變數（必須在任何 HuggingFace import 前執行）
+        # 這確保 HF_HUB_OFFLINE=1 等設定被正確載入
+        load_dotenv()
+
         from voice_assistant.config import get_settings
-        from voice_assistant.voice.handlers import create_voice_stream
 
         settings = get_settings()
+
+        # 設定 HF_HOME（必須在 import kokoro 前設定）
+        # 使用 setdefault 避免覆蓋已存在的環境變數設定
+        tts_model_path = Path(settings.tts_model_path).resolve()
+        tts_model_path.mkdir(parents=True, exist_ok=True)
+        os.environ.setdefault("HF_HOME", str(tts_model_path))
+
+        from voice_assistant.voice.handlers import create_voice_stream
+
         print("AI Voice Assistant 啟動中...")
         print(f"LLM 模型: {settings.openai_model}")
         print(f"ASR 模型: faster-whisper ({settings.whisper_model_size})")

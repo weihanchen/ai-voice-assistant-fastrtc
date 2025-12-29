@@ -70,6 +70,8 @@ class VoicePipeline:
         "你是一個友善的 AI 語音助理。"
         "請用繁體中文回答，回答要簡潔、口語化，適合語音輸出。"
         "當使用者詢問天氣相關問題時，請使用 get_weather 工具查詢天氣資訊。"
+        "當使用者詢問匯率或貨幣換算（例如：美金匯率、100 美金換台幣）時，"
+        "請使用 get_exchange_rate 工具查詢匯率或換算結果。"
         "根據工具回傳的資料，用自然的口語回應使用者。"
     )
 
@@ -100,6 +102,7 @@ class VoicePipeline:
         # 初始化 STT
         self.stt = stt or WhisperSTT(
             model_size=config.stt.model_size,
+            model_path=config.stt.model_path,
             device=config.stt.device,
             language=config.stt.language,
             beam_size=config.stt.beam_size,

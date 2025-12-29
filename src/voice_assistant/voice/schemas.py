@@ -110,7 +110,8 @@ class ConversationState(BaseModel):
 class STTConfig(BaseModel):
     """ASR 配置"""
 
-    model_size: str = Field(default="tiny", description="Whisper 模型大小")
+    model_size: str = Field(default="small", description="Whisper 模型大小")
+    model_path: str = Field(default="models/whisper", description="模型快取目錄")
     device: str = Field(default="cpu", description="運算裝置")
     language: str = Field(default="zh", description="目標語言")
     beam_size: int = Field(default=1, description="Beam search 大小")

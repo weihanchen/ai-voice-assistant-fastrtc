@@ -7,7 +7,7 @@ from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream
 
 from voice_assistant.config import Settings
 from voice_assistant.llm.client import LLMClient
-from voice_assistant.tools import ToolRegistry, WeatherTool
+from voice_assistant.tools import ExchangeRateTool, ToolRegistry, WeatherTool
 from voice_assistant.voice.pipeline import VoicePipeline
 from voice_assistant.voice.schemas import VoicePipelineConfig
 
@@ -31,6 +31,7 @@ def create_voice_stream(settings: Settings) -> Stream:
     config = VoicePipelineConfig(
         stt={
             "model_size": settings.whisper_model_size,
+            "model_path": settings.whisper_model_path,
             "language": settings.whisper_language,
             "device": settings.whisper_device,
         },
@@ -53,6 +54,7 @@ def create_voice_stream(settings: Settings) -> Stream:
     # 初始化工具註冊表（Composition Root）
     tool_registry = ToolRegistry()
     tool_registry.register(WeatherTool())
+    tool_registry.register(ExchangeRateTool())
 
     # 初始化語音管線
     pipeline = VoicePipeline(

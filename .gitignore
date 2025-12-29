@@ -68,6 +68,7 @@ models/*.onnx
 models/*.bin
 models/hub/
 models/xet/
+models/whisper/
 !models/.gitkeep
 !models/README.md
 

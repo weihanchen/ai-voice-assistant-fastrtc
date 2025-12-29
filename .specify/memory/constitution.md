@@ -55,7 +55,7 @@
 | 項目 | 技術 | 版本 | 說明 |
 |------|------|------|------|
 | **語音框架** | FastRTC | >=0.0.33 | WebRTC 實時通訊 |
-| **ASR** | faster-whisper | >=1.0.0 | 中文語音轉文字（tiny 模型） |
+| **ASR** | faster-whisper | >=1.0.0 | 中文語音轉文字（small 模型，準確度優先） |
 | **TTS** | Kokoro | kokoro + misaki[zh] >=0.8.2 | 中文文字轉語音（Kokoro-82M-v1.1-zh） |
 | **UI** | Gradio | >=5.x | FastRTC 內建 WebRTC 介面 |
 
@@ -71,7 +71,7 @@
 | 功能 | API | 條件 |
 |------|-----|------|
 | **天氣** | Open-Meteo | 免費，無需 API Key |
-| **匯率** | Frankfurter | 免費，無需 API Key |
+| **匯率** | ExchangeRate-API | 免費，無需 API Key，支援 TWD |
 | **股價** | yfinance | 免費 Python 套件 |
 
 ### Development Tools
@@ -126,8 +126,9 @@
 
 ---
 
-**Version**: 1.1.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-25
+**Version**: 1.2.0 | **Ratified**: 2025-12-23 | **Last Amended**: 2025-12-29
 
 ### Changelog
 
+- **v1.2.0** (2025-12-29): ASR 模型 tiny→small（提升中文辨識準確度）
 - **v1.1.0** (2025-12-25): Python 3.14→3.13、ASR Moonshine→faster-whisper（中文支援）、TTS 改用 kokoro + misaki[zh] 中文模型
