@@ -1,0 +1,148 @@
+# AI Voice Assistant
+
+基於 FastRTC 的中文語音助理，支援即時語音對話與工具查詢功能。
+
+## 功能特色
+
+- **即時語音對話** - 使用 WebRTC 實現低延遲語音串流
+- **中文語音辨識** - 基於 faster-whisper 的本地 ASR
+- **中文語音合成** - 使用 Kokoro TTS 產生自然語音
+- **智慧工具呼叫** - 整合 OpenAI Function Calling
+
+### 支援的查詢功能
+
+| 功能 | 說明 | 範例 |
+|------|------|------|
+| 天氣查詢 | 查詢台灣各城市天氣 | 「台北今天天氣如何？」 |
+| 匯率換算 | 支援多種貨幣換算 | 「100 美金換台幣多少？」 |
+| 股價查詢 | 台股、美股即時報價 | 「台積電現在多少錢？」 |
+
+## 快速開始
+
+### 使用 Docker（推薦）
+
+```bash
+# 複製環境設定
+cp .env.example .env
+
+# 設定 OpenAI API Key（編輯 .env）
+
+# 啟動服務
+docker compose up -d
+
+# 開啟瀏覽器 http://localhost:7860
+```
+
+### 本地開發
+
+```bash
+# 建立虛擬環境並安裝依賴
+uv sync
+
+# 複製並設定環境變數
+cp .env.example .env
+
+# 啟動服務
+uv run python -m voice_assistant.main
+
+# 開啟瀏覽器 http://localhost:7860
+```
+
+## 開發指南
+
+### 專案結構
+
+```
+ai-voice-assistant-fastrtc/
+├── src/voice_assistant/
+│   ├── main.py              # 應用程式入口
+│   ├── config.py            # 設定管理
+│   ├── llm/                  # LLM 客戶端
+│   ├── tools/                # 查詢工具
+│   └── voice/                # 語音處理
+├── tests/
+│   ├── unit/                 # 單元測試
+│   └── smoke/                # Smoke Test
+├── specs/                    # 規格文件
+├── Dockerfile
+├── compose.yaml
+└── pyproject.toml
+```
+
+### 執行測試
+
+```bash
+# 單元測試
+uv run pytest tests/unit/ -v
+
+# Smoke Test（需網路連線）
+uv run pytest tests/smoke/ -v
+```
+
+### 程式碼品質
+
+```bash
+# 檢查與格式化
+uv run ruff check . && uv run ruff format .
+```
+
+## 環境變數
+
+| 變數 | 說明 | 預設值 |
+|------|------|--------|
+| `OPENAI_API_KEY` | OpenAI API 金鑰 | (必填) |
+| `OPENAI_MODEL` | LLM 模型 | `gpt-4o-mini` |
+| `WHISPER_MODEL_SIZE` | ASR 模型大小 | `small` |
+| `TTS_VOICE` | TTS 音色 | `zf_001` |
+| `SERVER_PORT` | 服務埠號 | `7860` |
+
+完整設定請參考 `.env.example`。
+
+## 技術架構
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Gradio WebRTC UI                      │
+└─────────────────────┬───────────────────────────────────┘
+                      │ Audio Stream
+                      ▼
+┌─────────────────────────────────────────────────────────┐
+│                   FastRTC Stream                         │
+│              (ReplyOnPause Handler)                      │
+└─────────────────────┬───────────────────────────────────┘
+                      │
+        ┌─────────────┼─────────────┐
+        ▼             ▼             ▼
+   ┌─────────┐  ┌──────────┐  ┌─────────┐
+   │   ASR   │  │   LLM    │  │   TTS   │
+   │ Whisper │  │  OpenAI  │  │ Kokoro  │
+   └─────────┘  └────┬─────┘  └─────────┘
+                     │
+        ┌────────────┼────────────┐
+        ▼            ▼            ▼
+   ┌─────────┐  ┌─────────┐  ┌─────────┐
+   │ 天氣API │  │ 匯率API │  │ 股價API │
+   └─────────┘  └─────────┘  └─────────┘
+```
+
+## 擴展開發
+
+### 新增工具
+
+1. 在 `src/voice_assistant/tools/` 建立新工具類別，繼承 `BaseTool`
+2. 實作 `name`、`description`、`parameters`、`execute` 方法
+3. 在 `__init__.py` 匯出並註冊至 `ToolRegistry`
+4. 更新 `SYSTEM_PROMPT` 加入工具使用說明
+
+可參考現有工具實作：`weather.py`、`exchange_rate.py`、`stock_price.py`
+
+### 可擴展方向
+
+- **更多查詢工具** - 翻譯、計算機、日曆、新聞等
+- **多語言支援** - 英文、日文語音辨識與合成
+- **對話記憶** - 儲存對話歷史，支援上下文理解
+- **使用者認證** - 多用戶支援與個人化設定
+
+## 授權
+
+MIT License
