@@ -119,7 +119,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("台積電")
 
         assert result.success is True
@@ -141,7 +143,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("Apple")
 
         assert result.success is True
@@ -162,7 +166,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("2317")
 
         assert result.success is True
@@ -180,7 +186,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("特斯拉")
 
         assert result.success is True
@@ -198,7 +206,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("2330")
 
         assert result.success is True
@@ -215,7 +225,9 @@ class TestExecuteSuccess:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("AAPL")
 
         assert result.success is True
@@ -248,12 +260,6 @@ class TestExecuteErrors:
     @pytest.mark.asyncio
     async def test_api_timeout(self, tool: StockPriceTool) -> None:
         """測試 API 逾時。"""
-        import asyncio
-
-        async def slow_fetch(*args, **kwargs):
-            await asyncio.sleep(10)
-            return {}
-
         with patch.object(tool, "_fetch_price", side_effect=TimeoutError()):
             result = await tool.execute("台積電")
 
@@ -283,7 +289,9 @@ class TestExecuteErrors:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("台積電")
 
         assert result.success is False
@@ -301,7 +309,9 @@ class TestExecuteErrors:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("台積電")
 
         assert result.success is False
@@ -317,7 +327,59 @@ class TestExecuteErrors:
         mock_ticker = MagicMock()
         mock_ticker.fast_info = mock_info
 
-        with patch("yfinance.Ticker", return_value=mock_ticker):
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
+            result = await tool.execute("台積電")
+
+        assert result.success is False
+        assert "no_data" in result.error
+
+    @pytest.mark.asyncio
+    async def test_nan_price_rejected(self, tool: StockPriceTool) -> None:
+        """測試 NaN 價格被拒絕。"""
+        mock_info = MagicMock()
+        mock_info.last_price = float("nan")
+        mock_info.currency = "TWD"
+
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = mock_info
+
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
+            result = await tool.execute("台積電")
+
+        assert result.success is False
+        assert "no_data" in result.error
+
+    @pytest.mark.asyncio
+    async def test_inf_price_rejected(self, tool: StockPriceTool) -> None:
+        """測試 inf 價格被拒絕。"""
+        mock_info = MagicMock()
+        mock_info.last_price = float("inf")
+        mock_info.currency = "TWD"
+
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = mock_info
+
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
+            result = await tool.execute("台積電")
+
+        assert result.success is False
+        assert "no_data" in result.error
+
+    @pytest.mark.asyncio
+    async def test_fast_info_none(self, tool: StockPriceTool) -> None:
+        """測試 fast_info 為 None。"""
+        mock_ticker = MagicMock()
+        mock_ticker.fast_info = None
+
+        with patch(
+            "voice_assistant.tools.stock_price.yf.Ticker", return_value=mock_ticker
+        ):
             result = await tool.execute("台積電")
 
         assert result.success is False

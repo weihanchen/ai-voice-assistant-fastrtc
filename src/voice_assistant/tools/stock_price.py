@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import math
 from datetime import UTC, datetime
 from typing import Any
 
@@ -10,6 +12,8 @@ import yfinance as yf
 
 from voice_assistant.tools.base import BaseTool
 from voice_assistant.tools.schemas import ToolResult
+
+logger = logging.getLogger(__name__)
 
 # T002: 台股對照表（台灣 50 成分股）
 TW_STOCK_ALIASES: dict[str, str] = {
@@ -391,8 +395,13 @@ class StockPriceTool(BaseTool):
         def _sync_fetch() -> dict[str, Any]:
             ticker = yf.Ticker(symbol)
             info = ticker.fast_info
+
+            # 處理 fast_info 為 None 或無效的情況
+            if not info:
+                return {"price": None, "currency": None}
+
             return {
-                "price": info.last_price,
+                "price": getattr(info, "last_price", None),
                 "currency": getattr(info, "currency", None),
             }
 
@@ -439,6 +448,12 @@ class StockPriceTool(BaseTool):
                     "no_data: 無法取得報價資訊，該股票可能已下市或暫停交易"
                 )
 
+            # 驗證 price 為有限數值（排除 nan/inf）
+            if isinstance(price, float) and not math.isfinite(price):
+                return ToolResult.fail(
+                    "no_data: 無法取得報價資訊，該股票可能已下市或暫停交易"
+                )
+
             # 組裝結果
             result: dict[str, Any] = {
                 "symbol": symbol,
@@ -452,6 +467,10 @@ class StockPriceTool(BaseTool):
             return ToolResult.ok(result)
 
         except TimeoutError:
+            logger.warning("股票查詢逾時: symbol=%s", symbol)
             return ToolResult.fail("api_timeout: 股票查詢逾時，請稍後再試")
+        except asyncio.CancelledError:
+            raise
         except Exception:
+            logger.exception("股票查詢發生錯誤: symbol=%s", symbol)
             return ToolResult.fail("api_error: 股票服務暫時無法使用，請稍後再試")
