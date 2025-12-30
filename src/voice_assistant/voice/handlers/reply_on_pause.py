@@ -7,7 +7,12 @@ from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream
 
 from voice_assistant.config import Settings
 from voice_assistant.llm.client import LLMClient
-from voice_assistant.tools import ExchangeRateTool, ToolRegistry, WeatherTool
+from voice_assistant.tools import (
+    ExchangeRateTool,
+    StockPriceTool,
+    ToolRegistry,
+    WeatherTool,
+)
 from voice_assistant.voice.pipeline import VoicePipeline
 from voice_assistant.voice.schemas import VoicePipelineConfig
 
@@ -55,6 +60,7 @@ def create_voice_stream(settings: Settings) -> Stream:
     tool_registry = ToolRegistry()
     tool_registry.register(WeatherTool())
     tool_registry.register(ExchangeRateTool())
+    tool_registry.register(StockPriceTool())
 
     # 初始化語音管線
     pipeline = VoicePipeline(

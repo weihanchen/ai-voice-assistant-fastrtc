@@ -16,6 +16,7 @@ dependencies = [
     "soundfile>=0.13.0",
     # Weather Query Tool (002-weather-query)
     "httpx>=0.27.0",
+    "yfinance>=1.0",
 ]
 
 [project.optional-dependencies]
