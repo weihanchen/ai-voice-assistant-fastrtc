@@ -46,6 +46,13 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [tool.uv]
-# 使用 CPU 版本的 PyTorch 以減少安裝大小（約 2GB → 200MB）
-index-url = "https://download.pytorch.org/whl/cpu"
-extra-index-url = ["https://pypi.org/simple"]
+# PyTorch CPU 版本優先（減少映像大小）
+index-strategy = "unsafe-best-match"
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+
+[[tool.uv.index]]
+name = "pypi"
+url = "https://pypi.org/simple"
