@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 from collections.abc import Iterator
@@ -46,11 +45,10 @@ def _run_async_safely(coro):
     此函式會偵測並使用適當的方式執行 coroutine。
     """
     try:
-        asyncio.get_running_loop()
-        # 已有執行中的 loop，使用 thread pool 避免 nested loop 錯誤
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result()
+        loop = asyncio.get_running_loop()
+        # 已有執行中的 loop，使用 run_coroutine_threadsafe 正確整合
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result()
     except RuntimeError:
         # 沒有執行中的 loop，直接使用 asyncio.run()
         return asyncio.run(coro)
@@ -211,7 +209,7 @@ class VoicePipeline:
             # 1. 語音轉文字
             logger.info("[Pipeline] 開始 STT 辨識...")
             user_text = self.stt.stt(audio)
-            logger.info(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
 
             if not user_text.strip():
                 # 無有效輸入，回到待命
@@ -222,7 +220,7 @@ class VoicePipeline:
             self.state.last_user_text = user_text
 
             # 2. LLM 處理（含 Tool Calling）
-            logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
             messages = [user_message]
 
@@ -240,7 +238,7 @@ class VoicePipeline:
             response = _run_async_safely(
                 self._process_tool_calls(messages, llm_response, tools)
             )
-            logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
+            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
             self.state.last_assistant_text = response
 
             # 3. 更新狀態為回應中
@@ -334,7 +332,7 @@ class VoicePipeline:
             # 1. 語音轉文字
             logger.info("[Pipeline] 開始 STT 辨識...")
             user_text = self.stt.stt(audio)
-            logger.info(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
 
             if not user_text.strip():
                 # 無有效輸入，回到待命
@@ -349,15 +347,16 @@ class VoicePipeline:
             # T013: STT 完成後更新 history
             self.state.last_user_text = user_text
             self.state.history.add_user_message(user_text)
+            self.state.transition_to(VoiceState.PROCESSING)
 
             # 發送 UI 更新：使用者訊息已加入
             yield AdditionalOutputs(
                 self.state.get_gradio_messages(),
-                "⏳ 處理中...",
+                self.state.get_ui_state().status_text,
             )
 
             # 2. LLM 處理（含 Tool Calling）
-            logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
             messages = [user_message]
 
@@ -375,7 +374,7 @@ class VoicePipeline:
             response = _run_async_safely(
                 self._process_tool_calls(messages, llm_response, tools)
             )
-            logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
+            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
 
             # T014: LLM 回應後更新 history
             self.state.last_assistant_text = response

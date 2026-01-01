@@ -56,5 +56,9 @@ def additional_outputs_handler(
     Returns:
         (updated_chatbot, updated_status)
     """
-    logger.debug(f"[UI] 更新 - 狀態: {new_status}, 訊息數: {len(new_history)}")
-    return (new_history, new_status)
+    try:
+        logger.debug(f"[UI] 更新 - 狀態: {new_status}, 訊息數: {len(new_history)}")
+        return (new_history, new_status)
+    except Exception as e:
+        logger.error(f"[UI] 更新失敗: {e}", exc_info=True)
+        return (old_chatbot, old_status)
