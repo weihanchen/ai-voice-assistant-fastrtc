@@ -101,15 +101,30 @@
 
 ---
 
-## 階段 6：收尾與跨領域處理
+## 階段 6：音訊檔案測試模式 ✅
+
+**目的**：支援上傳音訊檔案替代麥克風輸入，方便在無法使用麥克風的環境下驗證功能
+
+**使用情境**：在嘈雜環境（如咖啡廳）或無麥克風設備時，可透過上傳預錄音訊檔案來測試完整流程
+
+- [x] T026 在 src/voice_assistant/voice/ui/blocks.py 新增 create_audio_input() 建立音訊上傳元件
+- [x] T027 在 src/voice_assistant/voice/handlers/reply_on_pause.py 建立自訂 UI 整合音訊上傳與 WebRTC
+- [x] T028 在 src/voice_assistant/voice/ui/blocks.py 實作 audio_input_handler() 處理上傳音訊
+- [x] T029 在 src/voice_assistant/voice/ui/__init__.py 匯出新函式
+
+**檢查點**：可透過上傳音訊檔案觸發完整對話流程（STT → LLM → TTS → UI 更新） ✅
+
+---
+
+## 階段 7：收尾與跨領域處理
 
 **目的**：影響多個 User Story 的改進項目
 
-- [x] T026 [P] 在 src/voice_assistant/voice/pipeline.py 新增空白 ASR 結果的錯誤處理
-- [x] T027 [P] 在 src/voice_assistant/voice/ui/blocks.py 新增 UI 更新事件的 logging
-- [x] T028 確認新檔案通過 Ruff linting 檢查
-- [ ] T029 執行 quickstart.md 驗證（手動測試）
-- [ ] T030 若有新模式建立，更新 CLAUDE.md
+- [x] T030 [P] 在 src/voice_assistant/voice/pipeline.py 新增空白 ASR 結果的錯誤處理
+- [x] T031 [P] 在 src/voice_assistant/voice/ui/blocks.py 新增 UI 更新事件的 logging
+- [x] T032 確認新檔案通過 Ruff linting 檢查
+- [ ] T033 執行 quickstart.md 驗證（手動測試）
+- [ ] T034 若有新模式建立，更新 CLAUDE.md
 
 ---
 
@@ -196,7 +211,7 @@ T009 [P] + T010 [P] 可並行（同檔案但不同函式）
 
 依優先順序順序執行：
 1. 階段 1 → 階段 2 → 階段 3（MVP 完成）
-2. 接著 階段 4 → 階段 5 → 階段 6
+2. 接著 階段 4 → 階段 5 → 階段 6 → 階段 7
 
 ---
 
@@ -204,11 +219,11 @@ T009 [P] + T010 [P] 可並行（同檔案但不同函式）
 
 | 檔案 | 動作 | 任務 |
 |------|------|------|
-| src/voice_assistant/voice/ui/__init__.py | 新增 | T002, T017 |
-| src/voice_assistant/voice/ui/blocks.py | 新增 | T008, T009, T010, T020, T023, T025, T027 |
+| src/voice_assistant/voice/ui/__init__.py | 新增 | T002, T017, T029 |
+| src/voice_assistant/voice/ui/blocks.py | 新增 | T008, T009, T010, T020, T023, T025, T026, T028, T031 |
 | src/voice_assistant/voice/schemas.py | 修改 | T004, T005, T006, T007, T018, T019, T021, T022 |
-| src/voice_assistant/voice/pipeline.py | 修改 | T011, T012, T013, T014, T024, T026 |
-| src/voice_assistant/voice/handlers/reply_on_pause.py | 修改 | T015, T016 |
+| src/voice_assistant/voice/pipeline.py | 修改 | T011, T012, T013, T014, T024, T030 |
+| src/voice_assistant/voice/handlers/reply_on_pause.py | 修改 | T015, T016, T027 |
 | pyproject.toml | 確認 | T003 |
 
 ---
