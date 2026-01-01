@@ -1,0 +1,78 @@
+# Docker Build Context Ignore
+# 減少 build context 大小，加速建構
+
+# Virtual environments (最大的節省！)
+.venv/
+venv/
+ENV/
+env/
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+*.egg
+
+# Build artifacts
+build/
+dist/
+wheels/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Linting cache
+.mypy_cache/
+.pyright/
+.ruff_cache/
+
+# Environment files (敏感資訊！)
+.env
+.env.local
+.env.*.local
+
+# Models (在 runtime 掛載，不要 bake 進映像)
+models/
+
+# Test files
+test_audio/
+tests/
+
+# Documentation (不需要在 container 中)
+docs/
+specs/
+*.md
+!pyproject.toml
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Claude/AI tools
+.claude/
+.specify/
+
+# GitHub (CI 配置不需要進入映像)
+.github/
