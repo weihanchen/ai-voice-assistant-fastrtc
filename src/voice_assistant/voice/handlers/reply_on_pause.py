@@ -15,6 +15,10 @@ from voice_assistant.tools import (
 )
 from voice_assistant.voice.pipeline import VoicePipeline
 from voice_assistant.voice.schemas import VoicePipelineConfig
+from voice_assistant.voice.ui import (
+    additional_outputs_handler,
+    create_additional_outputs,
+)
 
 
 def create_voice_stream(settings: Settings) -> Stream:
@@ -24,7 +28,7 @@ def create_voice_stream(settings: Settings) -> Stream:
         settings: 應用程式設定
 
     Returns:
-        配置好的 FastRTC Stream
+        配置好的 FastRTC Stream（已設定自定義 UI 與事件綁定）
     """
     # 初始化 LLM Client
     llm_client = LLMClient(
@@ -69,10 +73,11 @@ def create_voice_stream(settings: Settings) -> Stream:
         tool_registry=tool_registry,
     )
 
-    # 建立 FastRTC Stream
+    # 建立 FastRTC Stream（使用 process_audio_with_outputs 以支援 AdditionalOutputs）
+    # additional_outputs 會在 Gradio UI 中顯示 Chatbot 和狀態
     stream = Stream(
         handler=ReplyOnPause(
-            pipeline.process_audio,
+            pipeline.process_audio_with_outputs,
             algo_options=AlgoOptions(
                 audio_chunk_duration=config.vad.pause_threshold_ms / 1000,
                 started_talking_threshold=0.2,
@@ -88,6 +93,8 @@ def create_voice_stream(settings: Settings) -> Stream:
         ),
         modality="audio",
         mode="send-receive",
+        additional_outputs=create_additional_outputs(),
+        additional_outputs_handler=additional_outputs_handler,
     )
 
     return stream

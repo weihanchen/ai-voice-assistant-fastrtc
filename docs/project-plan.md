@@ -75,6 +75,7 @@
 | **002** | `weather-query` | Tool | 天氣查詢工具 |
 | **003** | `exchange-rate-query` | Tool | 匯率換算工具 |
 | **004** | `stock-price-query` | Tool | 股價查詢工具 |
+| **005** | `realtime-conversation-ui` | UI 增強 | 即時對話顯示介面 |
 
 ### 各 Spec 規格範圍
 
@@ -115,6 +116,15 @@
 - 支援市場 (台股/美股)
 - yfinance 整合需求
 - 股票名稱對應與成功指標
+
+#### 005 - Realtime Conversation UI (即時對話顯示)
+
+- 使用者故事：即時查看語音辨識與回應文字
+- 對話歷史顯示區（類似聊天介面）
+- 當前狀態指示（閒置/聆聽/處理中/回應中）
+- ASR 辨識文字即時顯示
+- AI 回應文字即時顯示
+- 與現有 Gradio WebRTC UI 整合
 
 ---
 
@@ -166,6 +176,8 @@ ai-voice-assistant-fastrtc/
 003 匯率 ─┼─ (可並行開發)
 004 股價 ─┘
  ↓
+005 即時對話 UI
+ ↓
 整合測試
 ```
 
@@ -177,7 +189,8 @@ ai-voice-assistant-fastrtc/
 | **Phase 1** | 001 | FastRTC + ASR + TTS 基本對話 |
 | **Phase 2** | 000 (完成) | LLM Client + Tool Registry |
 | **Phase 3** | 002, 003, 004 | 三個查詢工具 |
-| **Phase 4** | - | 端對端整合測試 |
+| **Phase 4** | - | 端對端整合測試 ✅ 已完成 |
+| **Phase 5** | 005 | 即時對話 UI 顯示 |
 
 ---
 
