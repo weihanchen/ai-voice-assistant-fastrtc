@@ -9,7 +9,7 @@ from typing import Literal
 
 import numpy as np
 from numpy.typing import NDArray
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class AudioFrame(BaseModel):
@@ -83,8 +83,97 @@ class VoiceState(str, Enum):
     INTERRUPTED = "interrupted"  # 被中斷
 
 
+class ConversationMessage(BaseModel):
+    """單一對話訊息
+
+    用於建構對話歷史，支援 Gradio Chatbot 格式輸出。
+    """
+
+    role: Literal["user", "assistant"] = Field(description="訊息角色")
+    content: str = Field(description="訊息內容")
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="訊息時間戳記"
+    )
+
+    @field_validator("content")
+    @classmethod
+    def content_not_empty(cls, v: str) -> str:
+        """驗證內容不可為空"""
+        if not v.strip():
+            raise ValueError("content 不可為空")
+        return v
+
+
+class ConversationHistory(BaseModel):
+    """對話歷史集合
+
+    管理所有對話訊息，支援 Gradio Chatbot 格式輸出。
+    """
+
+    messages: list[ConversationMessage] = Field(
+        default_factory=list, description="訊息列表"
+    )
+    max_messages: int = Field(default=40, description="最大訊息數（20 輪 = 40 訊息）")
+
+    def add_user_message(self, content: str) -> None:
+        """新增使用者訊息"""
+        self._add_message("user", content)
+
+    def add_assistant_message(self, content: str) -> None:
+        """新增助理訊息"""
+        self._add_message("assistant", content)
+
+    def _add_message(self, role: Literal["user", "assistant"], content: str) -> None:
+        """內部方法：新增訊息並維護最大數量限制"""
+        self.messages.append(ConversationMessage(role=role, content=content))
+        # 超過限制時移除最舊的訊息
+        if len(self.messages) > self.max_messages:
+            self.messages = self.messages[-self.max_messages :]
+
+    def to_gradio_format(self) -> list[dict[str, str]]:
+        """轉換為 Gradio Chatbot 格式
+
+        Returns:
+            Gradio Chatbot 訊息列表，格式為：
+            [{"role": "user", "content": "..."}, ...]
+        """
+        return [{"role": msg.role, "content": msg.content} for msg in self.messages]
+
+    def clear(self) -> None:
+        """清空對話歷史"""
+        self.messages = []
+
+
+class UIState(BaseModel):
+    """UI 顯示狀態
+
+    包含狀態文字和語音狀態資訊。
+    """
+
+    status_text: str = Field(default="🟢 待命", description="狀態顯示文字")
+    voice_state: VoiceState = Field(default=VoiceState.IDLE, description="語音狀態")
+
+    @classmethod
+    def from_voice_state(cls, state: VoiceState) -> "UIState":
+        """從 VoiceState 建立 UIState"""
+        status_map = {
+            VoiceState.IDLE: "🟢 待命",
+            VoiceState.LISTENING: "🎤 聆聽中...",
+            VoiceState.PROCESSING: "⏳ 處理中...",
+            VoiceState.SPEAKING: "🔊 回應中...",
+            VoiceState.INTERRUPTED: "⏸️ 已中斷",
+        }
+        return cls(
+            status_text=status_map[state],
+            voice_state=state,
+        )
+
+
 class ConversationState(BaseModel):
-    """對話狀態"""
+    """對話狀態
+
+    整合語音狀態與對話歷史，支援 UI 顯示。
+    """
 
     state: VoiceState = Field(default=VoiceState.IDLE, description="目前狀態")
     last_user_text: str | None = Field(
@@ -100,11 +189,22 @@ class ConversationState(BaseModel):
     last_activity_at: datetime = Field(
         default_factory=datetime.now, description="最後活動時間"
     )
+    history: ConversationHistory = Field(
+        default_factory=ConversationHistory, description="對話歷史"
+    )
 
     def transition_to(self, new_state: VoiceState) -> None:
         """狀態轉移"""
         self.state = new_state
         self.last_activity_at = datetime.now()
+
+    def get_ui_state(self) -> UIState:
+        """取得 UI 顯示狀態"""
+        return UIState.from_voice_state(self.state)
+
+    def get_gradio_messages(self) -> list[dict[str, str]]:
+        """取得 Gradio 格式訊息"""
+        return self.history.to_gradio_format()
 
 
 class STTConfig(BaseModel):

@@ -4,13 +4,13 @@
 """
 
 import asyncio
-import concurrent.futures
 import json
 import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
 import numpy as np
+from fastrtc import AdditionalOutputs
 from numpy.typing import NDArray
 
 from voice_assistant.llm.schemas import ChatMessage
@@ -45,11 +45,10 @@ def _run_async_safely(coro):
     此函式會偵測並使用適當的方式執行 coroutine。
     """
     try:
-        asyncio.get_running_loop()
-        # 已有執行中的 loop，使用 thread pool 避免 nested loop 錯誤
-        with concurrent.futures.ThreadPoolExecutor() as pool:
-            future = pool.submit(asyncio.run, coro)
-            return future.result()
+        loop = asyncio.get_running_loop()
+        # 已有執行中的 loop，使用 run_coroutine_threadsafe 正確整合
+        future = asyncio.run_coroutine_threadsafe(coro, loop)
+        return future.result()
     except RuntimeError:
         # 沒有執行中的 loop，直接使用 asyncio.run()
         return asyncio.run(coro)
@@ -210,7 +209,7 @@ class VoicePipeline:
             # 1. 語音轉文字
             logger.info("[Pipeline] 開始 STT 辨識...")
             user_text = self.stt.stt(audio)
-            logger.info(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
 
             if not user_text.strip():
                 # 無有效輸入，回到待命
@@ -221,7 +220,7 @@ class VoicePipeline:
             self.state.last_user_text = user_text
 
             # 2. LLM 處理（含 Tool Calling）
-            logger.info(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
+            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
             user_message = ChatMessage(role="user", content=user_text)
             messages = [user_message]
 
@@ -239,7 +238,7 @@ class VoicePipeline:
             response = _run_async_safely(
                 self._process_tool_calls(messages, llm_response, tools)
             )
-            logger.info(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
+            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
             self.state.last_assistant_text = response
 
             # 3. 更新狀態為回應中
@@ -298,3 +297,150 @@ class VoicePipeline:
     def reset(self) -> None:
         """重置對話狀態"""
         self.state = ConversationState()
+
+    def process_audio_with_outputs(
+        self,
+        audio: tuple[int, NDArray[np.float32]],
+    ) -> Iterator[tuple[int, NDArray[np.float32]] | AdditionalOutputs]:
+        """處理音訊輸入，回傳語音回應串流與 UI 更新
+
+        這是支援 AdditionalOutputs 的 FastRTC handler，
+        用於同步更新 Gradio UI 元件。
+
+        Args:
+            audio: (sample_rate, audio_array) 使用者語音
+
+        Yields:
+            - AdditionalOutputs(history, status): UI 更新
+            - (sample_rate, audio_chunk): 助理語音回應
+        """
+        # 更新狀態為處理中
+        self.state.transition_to(VoiceState.PROCESSING)
+        sample_rate, audio_array = audio
+        logger.info(
+            f"[Pipeline] 收到音訊: sample_rate={sample_rate}, "
+            f"shape={audio_array.shape}, dtype={audio_array.dtype}"
+        )
+
+        # 發送初始狀態更新
+        yield AdditionalOutputs(
+            self.state.get_gradio_messages(),
+            self.state.get_ui_state().status_text,
+        )
+
+        try:
+            # 1. 語音轉文字
+            logger.info("[Pipeline] 開始 STT 辨識...")
+            user_text = self.stt.stt(audio)
+            logger.debug(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
+
+            if not user_text.strip():
+                # 無有效輸入，回到待命
+                logger.info("[Pipeline] 無有效語音輸入，跳過")
+                self.state.transition_to(VoiceState.IDLE)
+                yield AdditionalOutputs(
+                    self.state.get_gradio_messages(),
+                    self.state.get_ui_state().status_text,
+                )
+                return
+
+            # T013: STT 完成後更新 history
+            self.state.last_user_text = user_text
+            self.state.history.add_user_message(user_text)
+            self.state.transition_to(VoiceState.PROCESSING)
+
+            # 發送 UI 更新：使用者訊息已加入
+            yield AdditionalOutputs(
+                self.state.get_gradio_messages(),
+                self.state.get_ui_state().status_text,
+            )
+
+            # 2. LLM 處理（含 Tool Calling）
+            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
+            user_message = ChatMessage(role="user", content=user_text)
+            messages = [user_message]
+
+            # 取得工具定義
+            tools = self.tool_registry.get_openai_tools()
+
+            # 第一次 LLM 呼叫
+            llm_response = _run_async_safely(
+                self.llm_client.chat(
+                    messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+                )
+            )
+
+            # 處理 Tool Calls（如果有）
+            response = _run_async_safely(
+                self._process_tool_calls(messages, llm_response, tools)
+            )
+            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
+
+            # T014: LLM 回應後更新 history
+            self.state.last_assistant_text = response
+            self.state.history.add_assistant_message(response)
+
+            # 3. 更新狀態為回應中
+            self.state.transition_to(VoiceState.SPEAKING)
+            self.state.turn_count += 1
+
+            # 發送 UI 更新：助理回應已加入
+            yield AdditionalOutputs(
+                self.state.get_gradio_messages(),
+                self.state.get_ui_state().status_text,
+            )
+
+            # 4. TTS 串流輸出
+            logger.info("[Pipeline] 開始 TTS 串流...")
+            chunk_count = 0
+            interrupted = False
+            for audio_chunk in self.tts.stream_tts_sync(response):
+                # 檢查是否被中斷（僅當 can_interrupt 啟用時）
+                if (
+                    self.config.can_interrupt
+                    and self.state.state == VoiceState.INTERRUPTED
+                ):
+                    logger.info("[Pipeline] TTS 被中斷，停止輸出")
+                    interrupted = True
+                    break
+                chunk_count += 1
+                yield audio_chunk
+
+            if interrupted:
+                logger.info(f"[Pipeline] TTS 中斷於第 {chunk_count} 個音訊片段")
+                yield AdditionalOutputs(
+                    self.state.get_gradio_messages(),
+                    "⏸️ 已中斷",
+                )
+            else:
+                logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")
+
+            # 5. 回應完成，回到待命
+            self.state.transition_to(VoiceState.IDLE)
+            yield AdditionalOutputs(
+                self.state.get_gradio_messages(),
+                self.state.get_ui_state().status_text,
+            )
+
+        except Exception as e:
+            # 錯誤處理：播放錯誤提示
+            logger.error(f"[Pipeline] 處理錯誤: {e}", exc_info=True)
+            error_message = "抱歉，處理時發生錯誤，請再試一次。"
+
+            # 發送錯誤狀態
+            yield AdditionalOutputs(
+                self.state.get_gradio_messages(),
+                "❌ 發生錯誤",
+            )
+
+            try:
+                for audio_chunk in self.tts.stream_tts_sync(error_message):
+                    yield audio_chunk
+            except Exception as tts_error:
+                logger.error(f"[Pipeline] 錯誤訊息 TTS 失敗: {tts_error}")
+            finally:
+                self.state.transition_to(VoiceState.IDLE)
+                yield AdditionalOutputs(
+                    self.state.get_gradio_messages(),
+                    self.state.get_ui_state().status_text,
+                )

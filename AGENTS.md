@@ -58,6 +58,15 @@ uv run ruff format .
 - Python 3.13: 使用型別標註
 - Ruff: 程式碼檢查與格式化
 - Pydantic: 資料驗證
+- **繁體中文優先**：所有文件、註解、commit message、spec 文件皆以繁體中文撰寫
+
+## Protected Files
+
+**禁止修改以下檔案**（由開發者手動維護）：
+- `CLAUDE.md` - Claude Code 專案指引入口
+- `AGENTS.md` - 開發規範與工作流程
+
+若需更新這些檔案，請通知開發者手動處理。
 
 ## Spec-Kit Workflow
 
@@ -100,6 +109,40 @@ uv run ruff format .
 | 002-weather-query | ✅ Complete | 天氣查詢工具（WeatherTool, Open-Meteo API, 24 tests passed） |
 | 001-fastrtc-voice-pipeline | ✅ Complete | 語音管線 MVP（中文 ASR/TTS、ReplyOnPause、中斷支援） |
 | 000-ai-voice-assistant | 🔄 Pending | 核心架構（LLMClient, ToolRegistry）|
+
+## Development Workflow
+
+### Commit 前流程
+1. **Code Review** - AI 審查邏輯、安全性、最佳實踐
+2. **修正問題** - 根據審查建議調整程式碼
+3. **Lint + Format** - `uv run ruff check --fix . && uv run ruff format .`
+4. **Commit** - 提交變更
+
+### Review 標準
+
+#### 程式碼品質
+- 函式保持單一職責，過長時考慮拆解
+- 使用 Pydantic 驗證外部輸入資料
+- 遵循現有 OOP 架構（BaseTool 繼承模式）
+
+#### 命名規範
+- Boolean: `is_*` / `has_*` / `can_*`
+- 函式: 動詞開頭 `get_*` / `create_*` / `handle_*`
+
+#### 錯誤處理
+- 外部 API 呼叫需處理異常（httpx 請求等）
+- 內部邏輯讓異常自然冒泡，由上層統一處理
+
+#### 安全性
+- 禁止硬編碼密鑰或敏感資訊
+- 檢查注入風險（SQL、Command Injection）
+
+### Commit Message 格式
+```
+<type>: <簡述>
+
+type: feat | fix | refactor | docs | test | chore
+```
 
 <!-- MANUAL ADDITIONS START -->
 <!-- MANUAL ADDITIONS END -->
