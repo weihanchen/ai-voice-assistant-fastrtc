@@ -60,6 +60,14 @@ uv run ruff format .
 - Pydantic: 資料驗證
 - **繁體中文優先**：所有文件、註解、commit message、spec 文件皆以繁體中文撰寫
 
+## Protected Files
+
+**禁止修改以下檔案**（由開發者手動維護）：
+- `CLAUDE.md` - Claude Code 專案指引入口
+- `AGENTS.md` - 開發規範與工作流程
+
+若需更新這些檔案，請通知開發者手動處理。
+
 ## Spec-Kit Workflow
 
 新功能開發必須依照以下流程進行：
@@ -105,7 +113,7 @@ uv run ruff format .
 ## Development Workflow
 
 ### Commit 前流程
-1. **Claude Code Review** - AI 審查邏輯、安全性、最佳實踐
+1. **Code Review** - AI 審查邏輯、安全性、最佳實踐
 2. **修正問題** - 根據審查建議調整程式碼
 3. **Lint + Format** - `uv run ruff check --fix . && uv run ruff format .`
 4. **Commit** - 提交變更
