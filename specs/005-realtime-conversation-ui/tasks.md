@@ -116,15 +116,15 @@
 
 ---
 
-## 階段 7：收尾與跨領域處理
+## 階段 7：收尾與跨領域處理 ✅
 
 **目的**：影響多個 User Story 的改進項目
 
 - [x] T030 [P] 在 src/voice_assistant/voice/pipeline.py 新增空白 ASR 結果的錯誤處理
 - [x] T031 [P] 在 src/voice_assistant/voice/ui/blocks.py 新增 UI 更新事件的 logging
 - [x] T032 確認新檔案通過 Ruff linting 檢查
-- [ ] T033 執行 quickstart.md 驗證（手動測試）
-- [ ] T034 若有新模式建立，更新 CLAUDE.md
+- [x] T033 執行 quickstart.md 驗證（手動測試）
+- [x] T034 若有新模式建立，更新 CLAUDE.md（已有 commit skill）
 
 ---
 
