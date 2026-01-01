@@ -203,8 +203,7 @@ def create_voice_stream(settings: Settings) -> Stream:
                 # 音訊上傳區
                 with gr.Accordion("📁 音訊檔案測試模式", open=False):
                     gr.Markdown(
-                        "上傳預錄的音訊檔案來測試對話功能，"
-                        "適用於無法使用麥克風的環境。"
+                        "上傳預錄的音訊檔案來測試對話功能，適用於無法使用麥克風的環境。"
                     )
                     audio_input = gr.Audio(
                         label="上傳音訊檔案",
