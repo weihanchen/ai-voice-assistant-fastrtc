@@ -13,6 +13,7 @@ import numpy as np
 from fastrtc import AdditionalOutputs
 from numpy.typing import NDArray
 
+from voice_assistant.flows import FlowExecutor
 from voice_assistant.llm.schemas import ChatMessage
 from voice_assistant.tools.registry import ToolRegistry
 from voice_assistant.voice.schemas import (
@@ -29,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 # Log 敏感資料最大長度（避免洩露 PII）
 _LOG_MAX_TEXT_LEN = 50
+
+# 是否啟用 LangGraph 流程（預設啟用）
+_USE_LANGGRAPH_FLOW = True
 
 
 def _truncate_for_log(text: str, max_len: int = _LOG_MAX_TEXT_LEN) -> str:
@@ -99,6 +103,12 @@ class VoicePipeline:
 
         # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
         self.tool_registry = ToolRegistry() if tool_registry is None else tool_registry
+
+        # 初始化 FlowExecutor（LangGraph 流程）
+        self.flow_executor: FlowExecutor | None = None
+        if _USE_LANGGRAPH_FLOW:
+            self.flow_executor = FlowExecutor(llm_client, self.tool_registry)
+            logger.info("[Pipeline] LangGraph 流程已啟用")
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(
@@ -182,6 +192,45 @@ class VoicePipeline:
         )
 
         return final_response.content or ""
+
+    async def _process_with_flow(self, user_text: str) -> str:
+        """使用 LangGraph 流程處理使用者輸入
+
+        Args:
+            user_text: 使用者輸入文字
+
+        Returns:
+            回應文字
+        """
+        if self.flow_executor is None:
+            raise RuntimeError("FlowExecutor 未初始化")
+
+        logger.info("[Pipeline] 使用 LangGraph 流程處理")
+        return await self.flow_executor.execute(user_text)
+
+    async def _process_with_legacy(self, user_text: str) -> str:
+        """使用舊版 Tool Calling 處理使用者輸入（降級模式）
+
+        Args:
+            user_text: 使用者輸入文字
+
+        Returns:
+            回應文字
+        """
+        logger.info("[Pipeline] 使用舊版 Tool Calling 處理")
+        user_message = ChatMessage(role="user", content=user_text)
+        messages = [user_message]
+
+        # 取得工具定義
+        tools = self.tool_registry.get_openai_tools()
+
+        # 第一次 LLM 呼叫
+        llm_response = await self.llm_client.chat(
+            messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+        )
+
+        # 處理 Tool Calls（如果有）
+        return await self._process_tool_calls(messages, llm_response, tools)
 
     def process_audio(
         self,
@@ -355,26 +404,17 @@ class VoicePipeline:
                 self.state.get_ui_state().status_text,
             )
 
-            # 2. LLM 處理（含 Tool Calling）
-            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
-            user_message = ChatMessage(role="user", content=user_text)
-            messages = [user_message]
+            # 2. 處理輸入（使用 LangGraph 流程或舊版 Tool Calling）
+            logger.debug(f"[Pipeline] 處理輸入: '{_truncate_for_log(user_text)}'")
 
-            # 取得工具定義
-            tools = self.tool_registry.get_openai_tools()
+            if self.flow_executor is not None:
+                # 使用 LangGraph 流程
+                response = _run_async_safely(self._process_with_flow(user_text))
+            else:
+                # 降級到舊版 Tool Calling
+                response = _run_async_safely(self._process_with_legacy(user_text))
 
-            # 第一次 LLM 呼叫
-            llm_response = _run_async_safely(
-                self.llm_client.chat(
-                    messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
-                )
-            )
-
-            # 處理 Tool Calls（如果有）
-            response = _run_async_safely(
-                self._process_tool_calls(messages, llm_response, tools)
-            )
-            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
+            logger.debug(f"[Pipeline] 回應: '{_truncate_for_log(response)}'")
 
             # T014: LLM 回應後更新 history
             self.state.last_assistant_text = response

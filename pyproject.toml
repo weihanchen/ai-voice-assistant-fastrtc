@@ -17,6 +17,8 @@ dependencies = [
     # Weather Query Tool (002-weather-query)
     "httpx>=0.27.0",
     "yfinance>=1.0",
+    # LangGraph Flow (006-langgraph-travel-flow)
+    "langgraph>=1.0.5",
 ]
 
 [project.optional-dependencies]
