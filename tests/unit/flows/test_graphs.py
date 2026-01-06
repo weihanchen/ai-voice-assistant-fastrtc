@@ -1,8 +1,6 @@
 """流程圖單元測試。"""
 
-from unittest.mock import AsyncMock, MagicMock
-
-import pytest
+from unittest.mock import MagicMock
 
 from voice_assistant.flows.graphs.main_router import route_by_intent
 from voice_assistant.flows.graphs.travel_planner import (

@@ -9,7 +9,7 @@ from voice_assistant.flows.nodes.travel.recommender import (
     recommend_indoor,
     recommend_outdoor,
 )
-from voice_assistant.flows.state import FlowState, TravelPlanState, WeatherInfo
+from voice_assistant.flows.state import FlowState, WeatherInfo
 
 
 class TestEvaluateWeather:

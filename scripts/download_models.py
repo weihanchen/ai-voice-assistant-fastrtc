@@ -69,7 +69,7 @@ def download_asr_model(cache_dir: Path, model_size: str = "tiny") -> None:
     from faster_whisper import WhisperModel
 
     # 下載模型
-    model = WhisperModel(
+    WhisperModel(
         model_size,
         device="cpu",
         compute_type="int8",

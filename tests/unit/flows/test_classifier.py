@@ -23,7 +23,10 @@ class TestClassifierNode:
         mock_llm.chat = AsyncMock(
             return_value=ChatMessage(
                 role="assistant",
-                content='{"intent": "weather", "tool_name": "get_weather", "tool_args": {"city": "台北"}}',
+                content=(
+                    '{"intent": "weather", "tool_name": "get_weather", '
+                    '"tool_args": {"city": "台北"}}'
+                ),
             )
         )
 
@@ -66,7 +69,11 @@ class TestClassifierNode:
         mock_llm.chat = AsyncMock(
             return_value=ChatMessage(
                 role="assistant",
-                content='{"intent": "exchange", "tool_name": "get_exchange_rate", "tool_args": {"from_currency": "USD", "to_currency": "TWD", "amount": 100}}',
+                content=(
+                    '{"intent": "exchange", "tool_name": "get_exchange_rate", '
+                    '"tool_args": {"from_currency": "USD", "to_currency": "TWD", '
+                    '"amount": 100}}'
+                ),
             )
         )
 
@@ -87,7 +94,10 @@ class TestClassifierNode:
         mock_llm.chat = AsyncMock(
             return_value=ChatMessage(
                 role="assistant",
-                content='{"intent": "stock", "tool_name": "get_stock_price", "tool_args": {"symbol": "2330.TW"}}',
+                content=(
+                    '{"intent": "stock", "tool_name": "get_stock_price", '
+                    '"tool_args": {"symbol": "2330.TW"}}'
+                ),
             )
         )
 

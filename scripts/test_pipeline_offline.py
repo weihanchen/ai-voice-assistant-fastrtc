@@ -47,7 +47,8 @@ def generate_test_audio(text: str = "你好") -> tuple[int, np.ndarray]:
     )
 
     sample_rate, audio = tts.tts(text)
-    print(f"[生成] 完成: sample_rate={sample_rate}, duration={len(audio)/sample_rate:.2f}s")
+    duration = len(audio) / sample_rate
+    print(f"[生成] 完成: sample_rate={sample_rate}, duration={duration:.2f}s")
 
     return sample_rate, audio
 
@@ -85,7 +86,8 @@ def load_audio(path: Path) -> tuple[int, np.ndarray]:
         audio_bytes = wav.readframes(n_frames)
 
     audio_array = np.frombuffer(audio_bytes, dtype=np.int16)
-    print(f"[載入] 音訊: {path}, sample_rate={sample_rate}, duration={len(audio_array)/sample_rate:.2f}s")
+    duration = len(audio_array) / sample_rate
+    print(f"[載入] 音訊: {path}, sample_rate={sample_rate}, duration={duration:.2f}s")
 
     return sample_rate, audio_array
 
