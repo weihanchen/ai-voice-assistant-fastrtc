@@ -1,6 +1,5 @@
 """狀態模型單元測試。"""
 
-
 from voice_assistant.flows.state import (
     CITY_RECOMMENDATIONS,
     FlowState,

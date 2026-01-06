@@ -37,9 +37,7 @@ class TestToolExecutorNode:
 
         assert "tool_result" in result
         assert result["tool_result"]["city"] == "台北"
-        mock_registry.execute.assert_called_once_with(
-            "get_weather", {"city": "台北"}
-        )
+        mock_registry.execute.assert_called_once_with("get_weather", {"city": "台北"})
 
     @pytest.mark.asyncio
     async def test_execute_tool_failure(self) -> None:
