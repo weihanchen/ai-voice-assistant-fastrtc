@@ -60,6 +60,13 @@ uv run ruff format .
 - Pydantic: 資料驗證
 - **繁體中文優先**：所有文件、註解、commit message、spec 文件皆以繁體中文撰寫
 
+## Software Quality Principles
+
+- **KISS & YAGNI**: 追求極致簡潔。拒絕過度設計，只為當前明確的需求編寫程式碼。
+- **SOLID 原則**: 嚴格遵守 SOLID 原則，尤其是 `SRP`（單一職責）和 `ISP`（介面隔離）。
+- **Clean Code & DRY**: 消除重複邏輯。注重程式碼的自解釋性和**防禦性程式設計**（Null Check, Exception Handling）。
+- **效能敏感**: 即時關注系統開銷、資源佔用（記憶體、連線池、磁碟 I/O）及演算法複雜度。
+
 ## Protected Files
 
 **禁止修改以下檔案**（由開發者手動維護）：
