@@ -1,18 +1,27 @@
 # AI Voice Assistant
 
-基於 FastRTC 的中文語音助理，支援即時語音對話與工具查詢功能。
+基於 FastRTC 的中文語音助理，支援即時語音對話、智慧工具查詢與**多代理協作 (Multi-Agent)** 任務處理。
 
 ![AI語音助理](./assets/images/AI語音助理.png)
 
 ## 功能特色
 
+### 核心能力
+
 - **即時語音對話** - 使用 WebRTC 實現低延遲語音串流
 - **即時對話顯示** - ASR 辨識結果與 AI 回應文字即時顯示於瀏覽器
-- **狀態指示器** - 顯示當前狀態（待命/聆聽/處理/回應）
 - **中文語音辨識** - 基於 faster-whisper 的本地 ASR
 - **中文語音合成** - 使用 Kokoro TTS 產生自然語音
-- **智慧工具呼叫** - 整合 OpenAI Function Calling
-- **LangGraph 流程編排** - 多步驟對話流程，支援旅遊規劃等複雜任務
+- **LangGraph 流程編排** - 意圖分類、多步驟流程與 SubGraph 架構
+- **多代理協作** - Supervisor 協調多個專家 Agent 並行處理複雜任務
+
+### 架構演進
+
+| 架構層級 | 技術實現 | 狀態 |
+|----------|----------|------|
+| **Tool 呼叫** | OpenAI Function Calling | ✅ 完成 |
+| **LangGraph Flow** | StateGraph + 意圖路由 + SubGraph | ✅ 完成 |
+| **Multi-Agent** | Supervisor + 專家 Agent 並行協作 | 📋 開發中 |
 
 ### 支援的查詢功能
 
@@ -63,13 +72,19 @@ ai-voice-assistant-fastrtc/
 ├── src/voice_assistant/
 │   ├── main.py              # 應用程式入口
 │   ├── config.py            # 設定管理
-│   ├── llm/                  # LLM 客戶端
-│   ├── tools/                # 查詢工具
-│   └── voice/                # 語音處理
+│   ├── llm/                 # LLM 客戶端
+│   ├── tools/               # 查詢工具（天氣/匯率/股價）
+│   ├── flows/               # LangGraph 流程模組
+│   │   ├── state.py         # 流程狀態定義
+│   │   ├── graphs/          # 流程圖（main_router, travel_planner）
+│   │   └── nodes/           # 流程節點（classifier, tool_executor...）
+│   ├── agents/              # 多代理模組（規劃中）
+│   └── voice/               # 語音處理（ASR/TTS/Handler）
 ├── tests/
-│   ├── unit/                 # 單元測試
-│   └── smoke/                # Smoke Test
-├── specs/                    # 規格文件
+│   ├── unit/                # 單元測試
+│   └── smoke/               # Smoke Test
+├── specs/                   # 規格文件（Spec-Kit）
+├── docs/                    # 專案文件
 ├── Dockerfile
 ├── compose.yaml
 └── pyproject.toml
@@ -170,6 +185,10 @@ uv run ruff check . && uv run ruff format .
 - **多語言支援** - 英文、日文語音辨識與合成
 - **持久化對話記憶** - 儲存對話歷史至資料庫
 - **使用者認證** - 多用戶支援與個人化設定
+
+## 文件
+
+- [專案規劃](docs/project-plan.md) - 架構設計與開發階段說明
 
 ## 授權
 
