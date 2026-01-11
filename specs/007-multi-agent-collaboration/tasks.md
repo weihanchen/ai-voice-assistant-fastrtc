@@ -74,8 +74,8 @@
 
 - [x] T019 [US1] 整合 MultiAgentExecutor 至 VoicePipeline in `src/voice_assistant/voice/pipeline.py`
 - [x] T020 [US1] 實作流程模式選擇邏輯（根據 FLOW_MODE）in `src/voice_assistant/voice/pipeline.py`
-- [ ] T021 [US1] 驗證並行查詢：「查台積電股價和美金匯率」(需人工驗證)
-- [ ] T022 [US1] 驗證多城市天氣：「台北和高雄今天天氣如何」(需人工驗證)
+- [x] T021 [US1] 驗證並行查詢：「查台積電股價和美金匯率」(人工驗證完成 - 匯率成功，股價因STT辨識問題失敗)
+- [x] T022 [US1] 驗證多城市天氣：「台北和高雄今天天氣如何」(人工驗證完成 - 2個WeatherAgent並行執行成功)
 - [x] T023 [US1] 實作部分失敗處理：成功部分正常回應，失敗部分說明原因
 
 **Checkpoint**: User Story 1 完成，可並行查詢多項資訊 ✅
@@ -93,7 +93,7 @@
 - [x] T024 [US2] 擴充 TravelAgent 支援天氣整合 in `src/voice_assistant/agents/travel.py`
 - [x] T025 [US2] 擴充 SupervisorAgent 識別旅遊意圖並分派 Weather+Travel Agent
 - [x] T026 [US2] 實作天氣不佳時的室內備案建議邏輯
-- [ ] T027 [US2] 驗證旅遊規劃：「我下週想去台中玩」(需人工驗證)
+- [x] T027 [US2] 驗證旅遊規劃：「我下週想去台中玩」(人工驗證完成 - 天氣+景點推薦+室內備案)
 
 **Checkpoint**: User Story 2 完成，可進行智慧旅遊規劃 ✅
 
@@ -110,7 +110,7 @@
 - [x] T028 [US3] 擴充 SupervisorAgent 識別出差意圖
 - [x] T029 [US3] 實作出差情境的 Agent 組合（Weather + Finance + General）
 - [x] T030 [US3] 擴充 GeneralAgent 提供出差注意事項
-- [ ] T031 [US3] 驗證出差助理：「後天去東京出差」(需人工驗證)
+- [x] T031 [US3] 驗證出差助理：「後天去東京出差」(人工驗證完成 - 天氣+匯率+注意事項並行執行)
 
 **Checkpoint**: User Story 3 完成，可提供出差行程建議 ✅
 
@@ -125,7 +125,7 @@
 ### Implementation for User Story 4
 
 - [x] T032 [US4] 完善 FLOW_MODE 切換邏輯（tools/langgraph/multi_agent）
-- [ ] T033 [US4] 驗證 FLOW_MODE=multi_agent 使用多代理流程 (需人工驗證)
+- [x] T033 [US4] 驗證 FLOW_MODE=multi_agent 使用多代理流程 (人工驗證完成 - log顯示Multi-Agent流程)
 - [ ] T034 [US4] 驗證 FLOW_MODE=langgraph 使用現有 006 流程 (需人工驗證)
 - [ ] T035 [US4] 驗證 FLOW_MODE=tools 使用純 Tool 呼叫 (需人工驗證)
 - [x] T036 [US4] 更新 .env.example 新增 FLOW_MODE 說明
