@@ -6,6 +6,7 @@
 import numpy as np
 import pytest
 
+from voice_assistant.config import FlowMode
 from voice_assistant.llm.schemas import ChatMessage
 from voice_assistant.voice.schemas import ConversationState, VoiceState
 
@@ -75,10 +76,23 @@ class TestVoicePipeline:
         return tts
 
     @pytest.fixture
-    def pipeline(self, mock_llm, mock_stt, mock_tts):
+    def mock_settings(self, mocker):
+        """Mock Settings 以避免環境變數依賴"""
+        settings = mocker.MagicMock()
+        settings.flow_mode = FlowMode.TOOLS
+        return settings
+
+    @pytest.fixture
+    def pipeline(self, mock_llm, mock_stt, mock_tts, mock_settings, mocker):
         """建立測試用 Pipeline"""
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import VoicePipelineConfig
+
+        # Mock get_settings 以避免環境變數依賴
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         return VoicePipeline(
             config=VoicePipelineConfig(),
@@ -153,7 +167,14 @@ class TestVoicePipelineInterrupt:
     """測試 VoicePipeline 中斷功能（US2）"""
 
     @pytest.fixture
-    def pipeline_speaking(self, mocker):
+    def mock_settings(self, mocker):
+        """Mock Settings 以避免環境變數依賴"""
+        settings = mocker.MagicMock()
+        settings.flow_mode = FlowMode.TOOLS
+        return settings
+
+    @pytest.fixture
+    def pipeline_speaking(self, mocker, mock_settings):
         """建立正在說話的 Pipeline"""
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import VoicePipelineConfig
@@ -161,6 +182,12 @@ class TestVoicePipelineInterrupt:
         mock_llm = mocker.MagicMock()
         mock_stt = mocker.MagicMock()
         mock_tts = mocker.MagicMock()
+
+        # Mock get_settings 以避免環境變數依賴
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         pipeline = VoicePipeline(
             config=VoicePipelineConfig(),
@@ -177,7 +204,7 @@ class TestVoicePipelineInterrupt:
         pipeline_speaking.on_interrupt()
         assert pipeline_speaking.state.state == VoiceState.INTERRUPTED
 
-    def test_on_interrupt_only_when_speaking(self, mocker):
+    def test_on_interrupt_only_when_speaking(self, mocker, mock_settings):
         """只有在 SPEAKING 時才能中斷"""
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import VoicePipelineConfig
@@ -185,6 +212,12 @@ class TestVoicePipelineInterrupt:
         mock_llm = mocker.MagicMock()
         mock_stt = mocker.MagicMock()
         mock_tts = mocker.MagicMock()
+
+        # Mock get_settings 以避免環境變數依賴
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         pipeline = VoicePipeline(
             config=VoicePipelineConfig(),
@@ -201,7 +234,14 @@ class TestVoicePipelineEmptyInput:
     """測試 VoicePipeline 空輸入處理（US3）"""
 
     @pytest.fixture
-    def pipeline_with_whitespace_input(self, mocker):
+    def mock_settings(self, mocker):
+        """Mock Settings 以避免環境變數依賴"""
+        settings = mocker.MagicMock()
+        settings.flow_mode = FlowMode.TOOLS
+        return settings
+
+    @pytest.fixture
+    def pipeline_with_whitespace_input(self, mocker, mock_settings):
         """建立會回傳空白的 STT"""
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import VoicePipelineConfig
@@ -210,6 +250,12 @@ class TestVoicePipelineEmptyInput:
         mock_stt = mocker.MagicMock()
         mock_stt.stt.return_value = "   "  # 只有空白
         mock_tts = mocker.MagicMock()
+
+        # Mock get_settings 以避免環境變數依賴
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         return VoicePipeline(
             config=VoicePipelineConfig(),

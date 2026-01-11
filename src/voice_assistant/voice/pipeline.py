@@ -13,6 +13,8 @@ import numpy as np
 from fastrtc import AdditionalOutputs
 from numpy.typing import NDArray
 
+from voice_assistant.agents import MultiAgentExecutor
+from voice_assistant.config import FlowMode, get_settings
 from voice_assistant.flows import FlowExecutor
 from voice_assistant.llm.schemas import ChatMessage
 from voice_assistant.tools.registry import ToolRegistry
@@ -30,9 +32,6 @@ logger = logging.getLogger(__name__)
 
 # Log 敏感資料最大長度（避免洩露 PII）
 _LOG_MAX_TEXT_LEN = 50
-
-# 是否啟用 LangGraph 流程（預設啟用）
-_USE_LANGGRAPH_FLOW = True
 
 
 def _truncate_for_log(text: str, max_len: int = _LOG_MAX_TEXT_LEN) -> str:
@@ -104,11 +103,24 @@ class VoicePipeline:
         # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
         self.tool_registry = ToolRegistry() if tool_registry is None else tool_registry
 
+        # 取得流程模式設定
+        settings = get_settings()
+        self.flow_mode = settings.flow_mode
+        logger.info(f"[Pipeline] 流程模式: {self.flow_mode.value}")
+
         # 初始化 FlowExecutor（LangGraph 流程）
         self.flow_executor: FlowExecutor | None = None
-        if _USE_LANGGRAPH_FLOW:
+        if self.flow_mode == FlowMode.LANGGRAPH:
             self.flow_executor = FlowExecutor(llm_client, self.tool_registry)
             logger.info("[Pipeline] LangGraph 流程已啟用")
+
+        # 初始化 MultiAgentExecutor（多代理協作）
+        self.multi_agent_executor: MultiAgentExecutor | None = None
+        if self.flow_mode == FlowMode.MULTI_AGENT:
+            self.multi_agent_executor = MultiAgentExecutor(
+                llm_client, self.tool_registry
+            )
+            logger.info("[Pipeline] Multi-Agent 流程已啟用")
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(
@@ -207,6 +219,21 @@ class VoicePipeline:
 
         logger.info("[Pipeline] 使用 LangGraph 流程處理")
         return await self.flow_executor.execute(user_text)
+
+    async def _process_with_multi_agent(self, user_text: str) -> str:
+        """使用 Multi-Agent 流程處理使用者輸入
+
+        Args:
+            user_text: 使用者輸入文字
+
+        Returns:
+            回應文字
+        """
+        if self.multi_agent_executor is None:
+            raise RuntimeError("MultiAgentExecutor 未初始化")
+
+        logger.info("[Pipeline] 使用 Multi-Agent 流程處理")
+        return await self.multi_agent_executor.execute(user_text)
 
     async def _process_with_legacy(self, user_text: str) -> str:
         """使用舊版 Tool Calling 處理使用者輸入（降級模式）
@@ -404,14 +431,17 @@ class VoicePipeline:
                 self.state.get_ui_state().status_text,
             )
 
-            # 2. 處理輸入（使用 LangGraph 流程或舊版 Tool Calling）
+            # 2. 根據 flow_mode 處理輸入
             logger.debug(f"[Pipeline] 處理輸入: '{_truncate_for_log(user_text)}'")
 
-            if self.flow_executor is not None:
+            if self.flow_mode == FlowMode.MULTI_AGENT:
+                # 使用 Multi-Agent 流程
+                response = _run_async_safely(self._process_with_multi_agent(user_text))
+            elif self.flow_mode == FlowMode.LANGGRAPH:
                 # 使用 LangGraph 流程
                 response = _run_async_safely(self._process_with_flow(user_text))
             else:
-                # 降級到舊版 Tool Calling
+                # FlowMode.TOOLS - 使用純 Tool Calling
                 response = _run_async_safely(self._process_with_legacy(user_text))
 
             logger.debug(f"[Pipeline] 回應: '{_truncate_for_log(response)}'")

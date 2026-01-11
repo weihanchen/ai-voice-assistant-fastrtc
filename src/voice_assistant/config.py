@@ -1,8 +1,22 @@
 """Configuration management for voice assistant."""
 
+from enum import Enum
 from functools import lru_cache
 
 from pydantic_settings import BaseSettings
+
+
+class FlowMode(str, Enum):
+    """流程處理模式。
+
+    - TOOLS: 純 Tool 呼叫模式
+    - LANGGRAPH: LangGraph 流程模式 (006 架構)
+    - MULTI_AGENT: 多代理協作模式 (007 架構)
+    """
+
+    TOOLS = "tools"
+    LANGGRAPH = "langgraph"
+    MULTI_AGENT = "multi_agent"
 
 
 class Settings(BaseSettings):
@@ -32,6 +46,9 @@ class Settings(BaseSettings):
     # Server
     server_host: str = "0.0.0.0"
     server_port: int = 7860
+
+    # Flow Mode
+    flow_mode: FlowMode = FlowMode.MULTI_AGENT
 
     model_config = {
         "env_file": ".env",
