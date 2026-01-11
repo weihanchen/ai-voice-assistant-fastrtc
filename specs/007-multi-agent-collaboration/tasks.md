@@ -126,8 +126,8 @@
 
 - [x] T032 [US4] 完善 FLOW_MODE 切換邏輯（tools/langgraph/multi_agent）
 - [x] T033 [US4] 驗證 FLOW_MODE=multi_agent 使用多代理流程 (人工驗證完成 - log顯示Multi-Agent流程)
-- [ ] T034 [US4] 驗證 FLOW_MODE=langgraph 使用現有 006 流程 (需人工驗證)
-- [ ] T035 [US4] 驗證 FLOW_MODE=tools 使用純 Tool 呼叫 (需人工驗證)
+- [x] T034 [US4] 驗證 FLOW_MODE=langgraph 使用現有 006 流程 (人工驗證完成 - log顯示LangGraph流程)
+- [x] T035 [US4] 驗證 FLOW_MODE=tools 使用純 Tool 呼叫 (人工驗證完成 - log顯示舊版Tool Calling)
 - [x] T036 [US4] 更新 .env.example 新增 FLOW_MODE 說明
 
 **Checkpoint**: User Story 4 完成，可切換流程模式 ✅
@@ -141,8 +141,8 @@
 - [x] T037 [P] 執行 ruff check 並修正所有 linting 錯誤
 - [x] T038 [P] 執行 ruff format 格式化所有程式碼
 - [x] T039 驗證現有測試全數通過（向後相容）- 203 tests passed
-- [ ] T040 [P] 執行 quickstart.md 驗證所有範例可正常運作 (需人工驗證)
-- [ ] T041 效能驗證：並行執行時間不超過最慢 Agent 的 1.2 倍 (需人工驗證)
+- [x] T040 [P] 執行 quickstart.md 驗證所有範例可正常運作 (人工驗證完成 - 所有場景測試通過)
+- [x] T041 效能驗證：並行執行時間不超過最慢 Agent 的 1.2 倍 (人工驗證完成 - log顯示並行API請求)
 
 ---
 
