@@ -21,16 +21,37 @@
 |----------|----------|------|
 | **Tool 呼叫** | OpenAI Function Calling | ✅ 完成 |
 | **LangGraph Flow** | StateGraph + 意圖路由 + SubGraph | ✅ 完成 |
-| **Multi-Agent** | Supervisor + 專家 Agent 並行協作 | 📋 開發中 |
+| **Multi-Agent** | Supervisor + 專家 Agent 並行協作 | ✅ 完成 |
+
+### Multi-Agent 協作範例
+
+> 💬 **「後天要去東京出差」**
+
+系統自動拆解為 3 個並行任務：
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  WeatherAgent   │     │  FinanceAgent   │     │  GeneralAgent   │
+│   查詢東京天氣   │     │  查詢日圓匯率   │     │  出差注意事項   │
+└────────┬────────┘     └────────┬────────┘     └────────┬────────┘
+         │                       │                       │
+         └───────────────────────┼───────────────────────┘
+                                 ▼
+                    ┌─────────────────────────┐
+                    │     Supervisor 彙整      │
+                    │  → 自然語言完整回應      │
+                    └─────────────────────────┘
+```
 
 ### 支援的查詢功能
 
 | 功能 | 說明 | 範例 |
 |------|------|------|
-| 天氣查詢 | 查詢台灣各城市天氣 | 「台北今天天氣如何？」 |
+| 天氣查詢 | 查詢台灣及國際城市天氣 | 「台北今天天氣如何？」 |
 | 匯率換算 | 支援多種貨幣換算 | 「100 美金換台幣多少？」 |
 | 股價查詢 | 台股、美股即時報價 | 「台積電現在多少錢？」 |
 | 旅遊規劃 | 根據天氣推薦景點 | 「我想去高雄玩」 |
+| 出差助理 | 天氣+匯率+注意事項 | 「後天要去東京出差」 |
 
 ## 快速開始
 
@@ -78,7 +99,7 @@ ai-voice-assistant-fastrtc/
 │   │   ├── state.py         # 流程狀態定義
 │   │   ├── graphs/          # 流程圖（main_router, travel_planner）
 │   │   └── nodes/           # 流程節點（classifier, tool_executor...）
-│   ├── agents/              # 多代理模組（規劃中）
+│   ├── agents/              # 多代理協作模組（Supervisor + 專家 Agent）
 │   └── voice/               # 語音處理（ASR/TTS/Handler）
 ├── tests/
 │   ├── unit/                # 單元測試
@@ -116,6 +137,7 @@ uv run ruff check . && uv run ruff format .
 | `WHISPER_MODEL_SIZE` | ASR 模型大小 | `small` |
 | `TTS_VOICE` | TTS 音色 | `zf_001` |
 | `SERVER_PORT` | 服務埠號 | `7860` |
+| `FLOW_MODE` | 流程模式 (`multi_agent`/`langgraph`/`tools`) | `multi_agent` |
 
 完整設定請參考 `.env.example`。
 
