@@ -152,4 +152,17 @@ type: feat | fix | refactor | docs | test | chore
 ```
 
 <!-- MANUAL ADDITIONS START -->
+
+## AI Agent 行為準則
+
+### 禁止事項
+
+1. **不要擅自修改版本號**：不要修改 `pyproject.toml` 等檔案中的版本要求，除非使用者明確要求
+2. **不要直接安裝套件**：不要使用 `pip install`直接安裝套件，應使用專案管理工具
+
+### 必須遵守
+
+1. **使用 uv 執行 Python**：所有 Python 相關指令必須透過 `uv run` 執行（如 `uv run pytest`）
+2. **遵循專案既有設定**：不要擅自變更專案的 linter、formatter、測試框架等設定
+
 <!-- MANUAL ADDITIONS END -->
