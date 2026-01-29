@@ -136,6 +136,10 @@ tests/
 
 ## Next Steps
 
+- Phase 3 MVP：「角色切換機制」主流程已包含 glue/UI 連結，現已補齊 VoicePipeline 角色切換的單元測試並全數通過。
+- 註記 T022/T025 皆已完成，請進入 US2 面試官角色設計階段。
+- 若有進一步跨模組整合測試或增強需求，請於 tasks.md 與 checklists/ 補強。
+
 使用 `/speckit.tasks` 生成具體的實作任務清單，然後使用 `/speckit.implement` 開始實作。
 
 ## Complexity Tracking

@@ -111,6 +111,66 @@ class TestVoicePipeline:
         list(pipeline.process_audio(audio))
         mock_stt.stt.assert_called_once()
 
+    def test_voice_intent_switch_role(self, mocker, mock_settings):
+        """語音觸發語意 intent 能自動切換角色並 TTS 播報"""
+        from voice_assistant.intent.schemas import Intent
+        from voice_assistant.roles.predefined.assistant import AssistantRole
+        from voice_assistant.roles.predefined.interviewer import InterviewerRole
+        from voice_assistant.roles.registry import RoleRegistry
+        from voice_assistant.voice.pipeline import VoicePipeline
+        from voice_assistant.voice.schemas import VoicePipelineConfig
+
+        # 準備 mock：STT、TTS
+        stt = mocker.MagicMock()
+        stt.stt.return_value = "請幫我切換到面試官"
+        tts = mocker.MagicMock()
+        tts.stream_tts_sync.return_value = iter([(24000, np.ones(10))])
+
+        # 準備 mock intent recognizer
+        mock_intent_recognizer = mocker.MagicMock()
+
+        async def _mock_recognizer_fn(text):
+            return Intent(
+                name="switch_role",
+                params={"role_id": "interviewer"},
+                description="",
+                score=0.9,
+            )
+
+        mock_intent_recognizer.recognize_intent_with_llm.side_effect = (
+            _mock_recognizer_fn
+        )
+
+        # 準備角色註冊表
+        reg = RoleRegistry()
+        reg.register(AssistantRole())
+        reg.register(InterviewerRole())
+
+        # pipeline
+        mock_llm = mocker.MagicMock()
+        pipeline = VoicePipeline(
+            config=VoicePipelineConfig(),
+            llm_client=mock_llm,
+            stt=stt,
+            tts=tts,
+            tool_registry=None,
+            intent_recognizer=mock_intent_recognizer,
+            role_registry=reg,
+        )
+        audio = (16000, np.zeros(16000, dtype=np.float32))
+        result = list(pipeline.process_audio_with_outputs(audio))
+        # 有 audio 塊+ AdditionalOutputs 回傳
+        audio_chunks = [x for x in result if isinstance(x, tuple)]
+        ui_chunks = [x for x in result if hasattr(x, "args")]
+        assert audio_chunks, "應有音訊片段 (TTS)"
+        assert ui_chunks, "應有 UI 追加回饋"
+        assert pipeline.state.current_role_id == "interviewer"
+        # 僅存取 .args 屬性的 AdditionalOutputs，避免型別錯誤
+        assert any(
+            hasattr(a, "args") and "已切換為「面試官」" in str(a.args)
+            for a in ui_chunks
+        )
+
     def test_process_audio_calls_llm(self, pipeline, mock_llm):
         """處理音訊會呼叫 LLM"""
         audio = (16000, np.zeros(16000, dtype=np.float32))
@@ -161,6 +221,69 @@ class TestVoicePipeline:
 
         assert pipeline.state.turn_count == 0
         assert pipeline.state.last_user_text is None
+
+    def test_switch_role_updates_state_and_prompt(self, pipeline):
+        """
+        切換角色後，狀態與 LLM prompt 均須同步
+        """
+        from voice_assistant.roles.predefined.assistant import AssistantRole
+        from voice_assistant.roles.predefined.coach import CoachRole
+        from voice_assistant.roles.predefined.interviewer import InterviewerRole
+
+        assistant = AssistantRole()
+        coach = CoachRole()
+        interviewer = InterviewerRole()
+
+        # 預設應未指定 current_role_id（None 為標準預設值）
+        assert pipeline.state.current_role_id is None
+
+        # 切換到 assistant
+        pipeline.switch_role(assistant)
+        assert pipeline.state.current_role_id == "assistant"
+        pipeline.llm_client.set_system_prompt.assert_called_with(
+            assistant.get_system_prompt()
+        )
+
+        # 切換到 coach
+        pipeline.switch_role(coach)
+        assert pipeline.state.current_role_id == "coach"
+        pipeline.llm_client.set_system_prompt.assert_called_with(
+            coach.get_system_prompt()
+        )
+
+        # 切換到 interviewer
+        pipeline.switch_role(interviewer)
+        assert pipeline.state.current_role_id == "interviewer"
+        pipeline.llm_client.set_system_prompt.assert_called_with(
+            interviewer.get_system_prompt()
+        )
+
+    def test_switch_role_to_invalid_object(self, pipeline):
+        """
+        傳入不合法角色物件（無 get_system_prompt）應引發例外
+        """
+
+        class FakeRole:
+            pass
+
+        fake = FakeRole()
+        with pytest.raises(AttributeError):
+            pipeline.switch_role(fake)
+
+    def test_switch_role_idempotent(self, pipeline):
+        """
+        重複切換同一角色，current_role_id 及 prompt 均正確
+        """
+        from voice_assistant.roles.predefined.assistant import AssistantRole
+
+        assistant = AssistantRole()
+        pipeline.switch_role(assistant)
+        old_prompt = assistant.get_system_prompt()
+        old_id = pipeline.state.current_role_id
+        # 再切一次
+        pipeline.switch_role(assistant)
+        assert pipeline.state.current_role_id == old_id
+        pipeline.llm_client.set_system_prompt.assert_called_with(old_prompt)
 
 
 class TestVoicePipelineInterrupt:

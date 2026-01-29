@@ -19,6 +19,7 @@
 
 1. **Given** 系統已啟動，**When** 註冊新角色，**Then** 該角色可用於切換
 2. **Given** 多個角色已註冊，**When** 切換到指定角色，**Then** LLM 系統提示詞更新為對應角色設定
+3. **Given** UI glue 已連結，**When** 使用 Sidebar 選單切換，**Then** pipeline 狀態 & system_prompt 應與選定角色保持同步（已由 test_voice_pipeline.py 驗證）
 
 ---
 

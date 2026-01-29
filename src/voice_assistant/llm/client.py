@@ -28,6 +28,7 @@ class LLMClient:
         api_key: str,
         model: str = "gpt-4o-mini",
         timeout: float = 30.0,
+        system_prompt: str | None = None,
     ) -> None:
         """
         初始化 LLM 客戶端。
@@ -36,9 +37,11 @@ class LLMClient:
             api_key: OpenAI API Key
             model: 使用的模型名稱
             timeout: API 呼叫逾時秒數
+            system_prompt: 預設系統提示詞（可為 None）
         """
         self.client = AsyncOpenAI(api_key=api_key, timeout=timeout)
         self.model = model
+        self._system_prompt = system_prompt
 
     async def chat(
         self,
@@ -52,7 +55,8 @@ class LLMClient:
         Args:
             messages: 對話歷史
             tools: OpenAI Function Calling 工具定義
-            system_prompt: 系統提示詞（會插入到 messages 開頭）
+            system_prompt: 系統提示詞（會插入到 messages 開頭，
+                優先於預設 system_prompt）
 
         Returns:
             LLM 回應的 ChatMessage
@@ -63,9 +67,10 @@ class LLMClient:
         # 準備訊息列表
         openai_messages: list[dict[str, Any]] = []
 
-        # 插入 system prompt
-        if system_prompt:
-            openai_messages.append({"role": "system", "content": system_prompt})
+        # 插入 system prompt，優先外部參數，其次實例層
+        prompt = system_prompt if system_prompt is not None else self._system_prompt
+        if prompt:
+            openai_messages.append({"role": "system", "content": prompt})
 
         # 轉換訊息格式
         for msg in messages:
@@ -94,6 +99,14 @@ class LLMClient:
 
         # 轉換回應
         return self._convert_response(response)
+
+    def set_system_prompt(self, prompt: str | None) -> None:
+        """
+        設定預設系統提示詞。
+        Args:
+            prompt: 系統提示詞（None 則清空）
+        """
+        self._system_prompt = prompt
 
     def _convert_response(self, response: Any) -> ChatMessage:
         """將 OpenAI 回應轉換為 ChatMessage。"""

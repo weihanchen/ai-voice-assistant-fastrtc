@@ -11,6 +11,10 @@ from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream, WebRTC
 
 from voice_assistant.config import Settings
 from voice_assistant.llm.client import LLMClient
+from voice_assistant.roles.predefined.assistant import AssistantRole
+from voice_assistant.roles.predefined.coach import CoachRole
+from voice_assistant.roles.predefined.interviewer import InterviewerRole
+from voice_assistant.roles.registry import RoleRegistry
 from voice_assistant.tools import (
     ExchangeRateTool,
     StockPriceTool,
@@ -43,25 +47,31 @@ def create_voice_stream(settings: Settings) -> Stream:
         model=settings.openai_model,
     )
 
-    # 建立語音管線配置
+    # 建立語音管線配置（使用正確 config 類別）
+    from voice_assistant.voice.schemas import (
+        STTConfig,
+        TTSConfig,
+        VADConfig,
+    )
+
     config = VoicePipelineConfig(
-        stt={
-            "model_size": settings.whisper_model_size,
-            "model_path": settings.whisper_model_path,
-            "language": settings.whisper_language,
-            "device": settings.whisper_device,
-        },
-        tts={
-            "model_path": settings.tts_model_path,
-            "voice": settings.tts_voice,
-            "speed": settings.tts_speed,
-        },
-        vad={
-            "pause_threshold_ms": settings.vad_pause_threshold_ms,
-            "min_speech_duration_ms": settings.vad_min_speech_duration_ms,
-            "speech_threshold": settings.vad_speech_threshold,
-            "min_silence_duration_ms": settings.vad_min_silence_duration_ms,
-        },
+        stt=STTConfig(
+            model_size=settings.whisper_model_size,
+            model_path=settings.whisper_model_path,
+            language=settings.whisper_language,
+            device=settings.whisper_device,
+        ),
+        tts=TTSConfig(
+            model_path=settings.tts_model_path,
+            voice=settings.tts_voice,
+            speed=settings.tts_speed,
+        ),
+        vad=VADConfig(
+            pause_threshold_ms=settings.vad_pause_threshold_ms,
+            min_speech_duration_ms=settings.vad_min_speech_duration_ms,
+            speech_threshold=settings.vad_speech_threshold,
+            min_silence_duration_ms=settings.vad_min_silence_duration_ms,
+        ),
         can_interrupt=True,
         server_host=settings.server_host,
         server_port=settings.server_port,
@@ -73,12 +83,68 @@ def create_voice_stream(settings: Settings) -> Stream:
     tool_registry.register(ExchangeRateTool())
     tool_registry.register(StockPriceTool())
 
-    # 初始化語音管線
+    # ----------
+    # 初始化角色註冊表與預設角色
+    role_registry = RoleRegistry()
+    role_registry.register(AssistantRole())
+    role_registry.register(CoachRole())
+    role_registry.register(InterviewerRole())
+
+    # 建立角色選項：ID -> 顯示名稱（含 emoji）
+    role_display_map = {
+        "assistant": "🤖 助理",
+        "coach": "💪 教練",
+        "interviewer": "👔 面試官",
+    }
+    available_roles = {
+        role.id: role_display_map.get(role.id, role.name)
+        for role in role_registry.list_roles()
+    }
+    default_role_id = next(iter(available_roles)) if available_roles else ""
+
+    # 初始化意圖辨識器
+    from voice_assistant.intent.recognizer import IntentRecognizer
+
+    intent_recognizer = IntentRecognizer(llm_client)
+
+    # 初始化語音狀態（state）
+    from voice_assistant.voice.schemas import ConversationState
+    from voice_assistant.voice.stt.whisper import WhisperSTT
+    from voice_assistant.voice.tts.kokoro import KokoroTTS
+
+    state = ConversationState()
+    stt = WhisperSTT(
+        model_size=config.stt.model_size,
+        model_path=config.stt.model_path,
+        device=config.stt.device,
+        language=config.stt.language,
+    )
+    tts = KokoroTTS(
+        model_path=config.tts.model_path,
+        voice=config.tts.voice,
+        speed=config.tts.speed,
+        language=config.tts.language,
+    )
+
+    # 初始化語音管線（修正為 required positional args）
     pipeline = VoicePipeline(
+        state,
+        stt,
+        tts,
         config=config,
         llm_client=llm_client,
         tool_registry=tool_registry,
+        intent_recognizer=intent_recognizer,
+        role_registry=role_registry,
     )
+    # 啟動階段先設置預設角色
+    if default_role_id:
+        pipeline.switch_role(role_registry.get(default_role_id))
+
+    # 回調 glue：角色切換
+    def on_role_change(role_id: str):
+        role = role_registry.get(role_id)
+        pipeline.switch_role(role)
 
     # 建立額外輸出元件（Chatbot 和狀態）
     chatbot, status_display = create_additional_outputs()
@@ -153,7 +219,9 @@ def create_voice_stream(settings: Settings) -> Stream:
         try:
             for output in pipeline.process_audio_with_outputs(processed_audio):
                 # 檢查是否為 AdditionalOutputs
-                if hasattr(output, "args"):
+                from fastrtc import AdditionalOutputs
+
+                if isinstance(output, AdditionalOutputs):
                     # AdditionalOutputs 物件
                     final_chatbot = output.args[0]
                     final_status = output.args[1]
@@ -189,6 +257,19 @@ def create_voice_stream(settings: Settings) -> Stream:
 
             # 右側：控制區
             with gr.Column(scale=1):
+                # 角色切換下拉選單元件
+                # choices 格式：[(顯示名稱, role_id), ...]
+                dropdown = gr.Dropdown(
+                    choices=[
+                        (display_name, role_id)
+                        for role_id, display_name in available_roles.items()
+                    ],
+                    value=default_role_id,
+                    label="選擇角色",
+                    interactive=True,
+                )
+                dropdown.change(fn=on_role_change, inputs=[dropdown], outputs=None)
+
                 # WebRTC 串流元件（放在右側上方，關閉全螢幕模式）
                 webrtc = WebRTC(
                     label="語音串流",
