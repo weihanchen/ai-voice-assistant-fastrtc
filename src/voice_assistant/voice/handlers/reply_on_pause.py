@@ -107,30 +107,8 @@ def create_voice_stream(settings: Settings) -> Stream:
 
     intent_recognizer = IntentRecognizer(llm_client)
 
-    # 初始化語音狀態（state）
-    from voice_assistant.voice.schemas import ConversationState
-    from voice_assistant.voice.stt.whisper import WhisperSTT
-    from voice_assistant.voice.tts.kokoro import KokoroTTS
-
-    state = ConversationState()
-    stt = WhisperSTT(
-        model_size=config.stt.model_size,
-        model_path=config.stt.model_path,
-        device=config.stt.device,
-        language=config.stt.language,
-    )
-    tts = KokoroTTS(
-        model_path=config.tts.model_path,
-        voice=config.tts.voice,
-        speed=config.tts.speed,
-        language=config.tts.language,
-    )
-
-    # 初始化語音管線（修正為 required positional args）
+    # 初始化語音管線（使用正確的 007 + 008 整合版本）
     pipeline = VoicePipeline(
-        state,
-        stt,
-        tts,
         config=config,
         llm_client=llm_client,
         tool_registry=tool_registry,
@@ -142,12 +120,42 @@ def create_voice_stream(settings: Settings) -> Stream:
         pipeline.switch_role(role_registry.get(default_role_id))
 
     # 回調 glue：角色切換
-    def on_role_change(role_id: str):
+    def on_role_change(role_id: str, current_chatbot: list, current_status: str):
+        # 防禦式：確保 current_chatbot 和 current_status 有預設值
+        current_chatbot = current_chatbot or []
+        current_status = current_status or "🟢 待命"
         role = role_registry.get(role_id)
         pipeline.switch_role(role)
+        welcome = (
+            role.get_welcome_message() if hasattr(role, "get_welcome_message") else None
+        )
+        if welcome:
+            # 在歡迎語前加入視覺分隔，避免與上一句緊鄰
+            updated_chatbot = current_chatbot + [
+                {"role": "assistant", "content": f"---\n\n{welcome}"}
+            ]
+            updated_status = f"🟢 {role.name}已啟用"
+            # 注意：歡迎語只在對話框顯示，不播放 TTS（避免與 WebRTC 串流衝突）
+            return updated_chatbot, updated_status
+        return current_chatbot, current_status
 
     # 建立額外輸出元件（Chatbot 和狀態）
     chatbot, status_display = create_additional_outputs()
+
+    # ---- [AI assistant injects welcome on initial load] ----
+    initial_history = []
+    initial_status = "🟢 待命"
+    default_role = role_registry.get(default_role_id) if default_role_id else None
+
+    if default_role and hasattr(default_role, "get_welcome_message"):
+        welcome_msg = default_role.get_welcome_message()
+        if welcome_msg:
+            initial_history = [{"role": "assistant", "content": welcome_msg}]
+            initial_status = f"🟢 {default_role.name}已啟用"
+            # 注意：首次載入時不播放 TTS（WebRTC 連線尚未建立）
+
+    chatbot.value = initial_history
+    status_display.value = initial_status
 
     # 建立 FastRTC Stream（使用 process_audio_with_outputs 以支援 AdditionalOutputs）
     stream = Stream(
@@ -268,7 +276,12 @@ def create_voice_stream(settings: Settings) -> Stream:
                     label="選擇角色",
                     interactive=True,
                 )
-                dropdown.change(fn=on_role_change, inputs=[dropdown], outputs=None)
+                # 正確綁定 chatbot/state 做到 UI 更新
+                dropdown.change(
+                    fn=on_role_change,
+                    inputs=[dropdown, chatbot, status_display],
+                    outputs=[chatbot, status_display],
+                )
 
                 # WebRTC 串流元件（放在右側上方，關閉全螢幕模式）
                 webrtc = WebRTC(

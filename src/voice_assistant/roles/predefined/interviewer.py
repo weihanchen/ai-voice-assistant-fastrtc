@@ -31,4 +31,6 @@ class InterviewerRole(BasePredefinedRole):
                 "感謝分享。針對這個選擇，有沒有做過風險評估？可以說明評估流程與考量點嗎？",
             ],
             is_active=True,
+            welcome_message="您好，我是您今天的面試官。請您簡單自我介紹一下，說明您的軟體經歷與技能強項。",
+            preferred_flow_mode="tools",  # 面試對話使用純 Tool Calling 模式
         )

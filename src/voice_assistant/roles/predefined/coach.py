@@ -28,4 +28,6 @@ class CoachRole(BasePredefinedRole):
                 "記住，遇到困難時保持彈性很關鍵！",
             ],
             is_active=True,
+            welcome_message="很高興成為您的教練，今天有什麼想挑戰的目標或遇到什麼困難嗎？",
+            preferred_flow_mode="tools",  # 教練對話使用純 Tool Calling 模式
         )

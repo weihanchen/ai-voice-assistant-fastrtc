@@ -30,6 +30,10 @@ class Role(BaseModel):
     example_responses: list[str] = Field(default_factory=list, description="範例回應")
     # 配置
     is_active: bool = Field(True, description="是否啟用")
+    # 新增：角色專屬的流程模式（None 表示使用全域設定）
+    preferred_flow_mode: str | None = Field(
+        None, description="角色偏好的流程模式 (tools/langgraph/multi_agent)"
+    )
     created_at: datetime = Field(default_factory=datetime.now, description="建立時間")
     updated_at: datetime | None = Field(None, description="更新時間")
 

@@ -12,6 +12,7 @@
 - **即時對話顯示** - ASR 辨識結果與 AI 回應文字即時顯示於瀏覽器
 - **中文語音辨識** - 基於 faster-whisper 的本地 ASR
 - **中文語音合成** - 使用 Kokoro TTS 產生自然語音
+- **角色切換系統** - 支援面試官、助理、教練等多種角色，透過語音或 UI 切換
 - **LangGraph 流程編排** - 意圖分類、多步驟流程與 SubGraph 架構
 - **多代理協作** - Supervisor 協調多個專家 Agent 並行處理複雜任務
 
@@ -95,6 +96,11 @@ ai-voice-assistant-fastrtc/
 │   ├── config.py            # 設定管理
 │   ├── llm/                 # LLM 客戶端
 │   ├── tools/               # 查詢工具（天氣/匯率/股價）
+│   ├── roles/               # 角色切換系統（面試官/助理/教練）
+│   │   ├── schemas.py       # 角色資料模型
+│   │   ├── registry.py      # 角色註冊管理
+│   │   ├── intent.py        # 意圖識別
+│   │   └── predefined/      # 預設角色定義
 │   ├── flows/               # LangGraph 流程模組
 │   │   ├── state.py         # 流程狀態定義
 │   │   ├── graphs/          # 流程圖（main_router, travel_planner）
@@ -105,6 +111,9 @@ ai-voice-assistant-fastrtc/
 │   ├── unit/                # 單元測試
 │   └── smoke/               # Smoke Test
 ├── specs/                   # 規格文件（Spec-Kit）
+│   ├── 006-langgraph-flow/  # LangGraph 流程規格
+│   ├── 007-multi-agent/     # 多代理協作規格
+│   └── 008-role-switching/  # 角色切換規格
 ├── docs/                    # 專案文件
 ├── Dockerfile
 ├── compose.yaml
@@ -143,6 +152,8 @@ uv run ruff check . && uv run ruff format .
 
 ## 技術架構
 
+### 整體系統架構
+
 ```
 ┌───────────────────────────────────────────────────────────────┐
 │                      Gradio WebRTC UI                          │
@@ -180,7 +191,7 @@ uv run ruff check . && uv run ruff format .
 │ ┌─────────────────────────────────────────────────────────┐  │
 │ │                   SupervisorAgent                        │  │
 │ │             (任務拆解 + 結果彙整)                        │  │
-│ └───────────────────────┬─────────────────────────────────┘  │
+│ │ └───────────────────────┬─────────────────────────────────┘  │
 │                         │ Send() 並行分派                     │
 │      ┌──────────────────┼──────────────────┐                 │
 │      ▼                  ▼                  ▼                 │
@@ -199,6 +210,124 @@ uv run ruff check . && uv run ruff format .
 │       └─────────┘    └─────────┘    └─────────┘               │
 └───────────────────────────────────────────────────────────────┘
 ```
+
+### 角色切換與流程模式選擇
+
+系統支援**角色切換功能 (008-role-switching)**，不同角色可使用不同的處理流程：
+
+```mermaid
+flowchart TD
+    Start([使用者輸入]) --> CheckIntent{意圖識別}
+    
+    CheckIntent -->|角色切換指令| SwitchRole[執行角色切換]
+    SwitchRole --> UpdatePrompt[更新 system_prompt]
+    UpdatePrompt --> PlayWelcome[播放歡迎訊息]
+    PlayWelcome --> End([結束])
+    
+    CheckIntent -->|一般對話| GetRole[取得當前角色]
+    GetRole --> CheckPreferred{角色有<br/>preferred_flow_mode?}
+    
+    CheckPreferred -->|有| UseRoleMode[使用角色專屬模式]
+    CheckPreferred -->|無| UseGlobalMode[使用全域 FLOW_MODE]
+    
+    UseRoleMode --> SelectFlow{選擇流程}
+    UseGlobalMode --> SelectFlow
+    
+    SelectFlow -->|multi_agent| MultiAgent[Multi-Agent 流程]
+    SelectFlow -->|langgraph| LangGraph[LangGraph 流程]
+    SelectFlow -->|tools| Tools[Tool Calling 流程]
+    
+    MultiAgent --> MA_Supervisor[Supervisor 分析任務]
+    MA_Supervisor --> MA_Dispatch[並行分派給專家 Agent]
+    MA_Dispatch --> MA_Weather[WeatherAgent]
+    MA_Dispatch --> MA_Finance[FinanceAgent]
+    MA_Dispatch --> MA_Travel[TravelAgent]
+    MA_Dispatch --> MA_General[GeneralAgent]
+    MA_Weather --> MA_Merge[Supervisor 彙整結果]
+    MA_Finance --> MA_Merge
+    MA_Travel --> MA_Merge
+    MA_General --> MA_Merge
+    MA_Merge --> Response[生成回應]
+    
+    LangGraph --> LG_Classify[意圖分類節點]
+    LG_Classify --> LG_Route{路由判斷}
+    LG_Route -->|travel| LG_Travel[旅遊規劃 SubGraph]
+    LG_Route -->|tool| LG_Tool[工具執行節點]
+    LG_Route -->|chat| LG_Chat[一般對話節點]
+    LG_Travel --> Response
+    LG_Tool --> Response
+    LG_Chat --> Response
+    
+    Tools --> T_LLM[LLM 處理]
+    T_LLM --> T_Check{需要呼叫工具?}
+    T_Check -->|是| T_Execute[執行工具]
+    T_Execute --> T_LLM
+    T_Check -->|否| Response
+    
+    Response --> TTS[TTS 語音輸出]
+    TTS --> End
+    
+    style UseRoleMode fill:#90EE90
+    style MultiAgent fill:#FFE4B5
+    style LangGraph fill:#FFE4B5
+    style Tools fill:#ADD8E6
+    style MA_Supervisor fill:#FFA07A
+    style LG_Classify fill:#FFA07A
+    style T_LLM fill:#FFA07A
+```
+
+### 角色與流程模式對應
+
+| 角色 | preferred_flow_mode | 適用場景 | 說明 |
+|------|---------------------|----------|------|
+| **助理** (assistant) | `multi_agent` | 任務導向查詢 | 智能分派任務給專家 Agent，適合「後天去東京」這類需要多重資訊的查詢 |
+| **面試官** (interviewer) | `tools` | 對話互動 | 深度追問、連貫對話，適合面試練習場景 |
+| **教練** (coach) | `tools` | 對話互動 | 引導式對話、建議回饋，適合教練場景 |
+
+### 流程模式詳細說明
+
+#### 1. Multi-Agent 模式（任務導向）
+
+**適用場景**: 需要查詢多種資訊並整合的複雜任務
+
+**工作流程**:
+1. Supervisor 分析使用者需求
+2. 拆解成多個子任務
+3. 使用 `Send()` 並行分派給專家 Agent
+4. 各 Agent 獨立執行查詢（天氣、匯率、股價等）
+5. Supervisor 彙整所有結果
+6. 生成自然語言完整回應
+
+**優點**: 智能路由、專業分工、並行處理
+**缺點**: 對話較生硬，不適合需要連貫互動的場景
+
+#### 2. LangGraph 模式（流程編排）
+
+**適用場景**: 需要多步驟推理和條件分支的流程
+
+**工作流程**:
+1. 意圖分類節點判斷使用者意圖
+2. 根據意圖路由到不同處理分支
+3. 使用 SubGraph 處理複雜子流程（如旅遊規劃）
+4. 狀態機管理對話狀態
+5. 生成回應
+
+**優點**: 流程可視化、狀態管理清晰、支援複雜分支邏輯
+**缺點**: 配置複雜、學習曲線陡
+
+#### 3. Tool Calling 模式（對話導向）
+
+**適用場景**: 需要自然對話互動的場景（面試、教練、一般聊天）
+
+**工作流程**:
+1. LLM 直接處理使用者輸入
+2. 根據 system_prompt 判斷是否需要工具
+3. 如需要，呼叫對應工具（Function Calling）
+4. 整合工具結果繼續對話
+5. 生成自然回應
+
+**優點**: 對話自然、回應連貫、配置簡單
+**缺點**: 複雜任務處理能力較弱
 
 ## 擴展開發
 
