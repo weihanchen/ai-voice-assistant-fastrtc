@@ -37,7 +37,8 @@ def test_create_role_selector_basic(dummy_roles):
         # choices、value、label 應正確設置
         MDropdown.assert_called_once()
         called_kwargs = MDropdown.call_args.kwargs
-        assert set([o[0] for o in called_kwargs["choices"]]) == set(dummy_roles.keys())
+        # create_role_selector 只傳遞 keys（不是 tuple 格式）
+        assert set(called_kwargs["choices"]) == set(dummy_roles.keys())
         assert called_kwargs["value"] == "assistant"
         assert called_kwargs["label"] == "測試角色："
 

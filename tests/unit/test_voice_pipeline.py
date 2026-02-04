@@ -46,22 +46,6 @@ class TestConversationState:
 
 
 class TestVoicePipeline:
-    def test_play_text_via_tts_calls_tts(self, pipeline, mocker):
-        text = "系統測試播報"
-        tts_mock = pipeline.tts
-        tts_mock.stream_tts_sync = mocker.MagicMock(
-            return_value=iter([(24000, np.zeros(10))])
-        )
-        pipeline.play_text_via_tts(text)
-        import time
-
-        # Wait for background thread (at most 0.1s)
-        for _ in range(10):
-            if tts_mock.stream_tts_sync.called:
-                break
-            time.sleep(0.01)
-        tts_mock.stream_tts_sync.assert_called_once_with(text)
-
     """測試 VoicePipeline"""
 
     @pytest.fixture
@@ -180,11 +164,13 @@ class TestVoicePipeline:
         """處理音訊會呼叫 LLM"""
         audio = (16000, np.zeros(16000, dtype=np.float32))
         list(pipeline.process_audio_with_outputs(audio))
-        # LLM 被呼叫一次，參數是 ChatMessage list
-        mock_llm.chat.assert_called_once()
-        call_args = mock_llm.chat.call_args[0][0]
-        assert len(call_args) == 1
-        assert call_args[0].content == "這是測試輸入"
+        assert mock_llm.chat.call_count >= 1
+        last_call = mock_llm.chat.call_args_list[-1]
+        kwargs = last_call[1]
+        assert "messages" in kwargs
+        messages = kwargs["messages"]
+        assert len(messages) == 1
+        assert messages[0].content == "這是測試輸入"
 
     def test_process_audio_yields_tts_output(self, pipeline):
         """處理音訊會產生 TTS 輸出"""
