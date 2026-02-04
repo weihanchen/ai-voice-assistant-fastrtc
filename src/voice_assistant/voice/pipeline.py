@@ -88,6 +88,7 @@ class VoicePipeline:
         tool_registry: ToolRegistry | None = None,
         intent_recognizer=None,
         role_registry=None,
+        state: ConversationState | None = None,
     ):
         """初始化語音管線
 
@@ -99,10 +100,11 @@ class VoicePipeline:
             tool_registry: 工具註冊表（可選，預設使用空註冊表）
             intent_recognizer: 意圖辨識器（008 角色切換）
             role_registry: 角色註冊表（008 角色切換）
+            state: 對話狀態（可選，預設自動建立）
         """
         self.config = config
         self.llm_client = llm_client
-        self.state = ConversationState()
+        self.state = state if state is not None else ConversationState()
 
         # 008: 角色切換支援
         self.intent_recognizer = intent_recognizer
