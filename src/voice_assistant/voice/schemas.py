@@ -175,6 +175,7 @@ class ConversationState(BaseModel):
     整合語音狀態與對話歷史，支援 UI 顯示。
     """
 
+    current_role_id: str | None = Field(default=None, description="目前角色 ID")
     state: VoiceState = Field(default=VoiceState.IDLE, description="目前狀態")
     last_user_text: str | None = Field(
         default=None, description="最後一次使用者輸入文字"

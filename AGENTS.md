@@ -1,8 +1,10 @@
-# ai-voice-assistant-fastrtc Development Guidelines
+﻿# ai-voice-assistant-fastrtc Development Guidelines
 
 Auto-generated from feature plans. Last updated: 2025-12-25
 
 ## Active Technologies
+- Python 3.13 + FastRTC >=0.0.33, openai >=1.58.x, Gradio >=5.x, Pydantic >=2.10.x (008-role-switching)
+- 記憶體內存儲（無持久化需求） (008-role-switching)
 
 - Python 3.13 + OpenAI SDK + Pydantic (000-ai-voice-assistant)
 - FastRTC + faster-whisper + Kokoro TTS (001-fastrtc-voice-pipeline)
@@ -102,11 +104,10 @@ uv run ruff format .
 - Extensible Design
 
 ## Recent Changes
+- 008-role-switching: Added Python 3.13 + FastRTC >=0.0.33, openai >=1.58.x, Gradio >=5.x, Pydantic >=2.10.x
 
 - 003-exchange-rate-query: 匯率查詢工具（httpx + ExchangeRate-API）✅ 實作完成
 - 002-weather-query: 天氣查詢工具（httpx + Open-Meteo API）✅ 實作完成
-- 001-fastrtc-voice-pipeline: 語音管線（FastRTC + faster-whisper + Kokoro TTS）✅ 實作完成
-- 000-ai-voice-assistant: 核心架構骨架（LLMClient, ToolRegistry）
 
 ## Implementation Status
 

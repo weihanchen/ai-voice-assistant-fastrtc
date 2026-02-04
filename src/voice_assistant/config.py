@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     """應用程式配置。"""
 
     # OpenAI
-    openai_api_key: str
+    openai_api_key: str = "sk-test-placeholder-key"
     openai_model: str = "gpt-4o-mini"
 
     # STT (Speech-to-Text)

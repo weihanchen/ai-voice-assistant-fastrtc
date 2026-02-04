@@ -1,6 +1,6 @@
 """語音管線主類別
 
-整合 STT、LLM、TTS 實現完整語音對話流程。
+整合 STT、LLM、TTS 實現完整語音對話流程，支援角色切換。
 """
 
 import asyncio
@@ -64,11 +64,11 @@ if TYPE_CHECKING:
 class VoicePipeline:
     """語音管線主類別
 
-    整合 STT、LLM、TTS 實現完整語音對話流程。
+    整合 STT、LLM、TTS 實現完整語音對話流程，支援角色切換。
     """
 
-    # 系統提示詞
-    SYSTEM_PROMPT = (
+    # 預設系統提示詞（當沒有角色時使用）
+    DEFAULT_SYSTEM_PROMPT = (
         "你是一個友善的 AI 語音助理。"
         "請用繁體中文回答，回答要簡潔、口語化，適合語音輸出。"
         "當使用者詢問天氣相關問題時，請使用 get_weather 工具查詢天氣資訊。"
@@ -86,6 +86,9 @@ class VoicePipeline:
         stt: WhisperSTT | None = None,
         tts: KokoroTTS | None = None,
         tool_registry: ToolRegistry | None = None,
+        intent_recognizer=None,
+        role_registry=None,
+        state: ConversationState | None = None,
     ):
         """初始化語音管線
 
@@ -95,10 +98,17 @@ class VoicePipeline:
             stt: STT 實例（可選，預設自動建立）
             tts: TTS 實例（可選，預設自動建立）
             tool_registry: 工具註冊表（可選，預設使用空註冊表）
+            intent_recognizer: 意圖辨識器（008 角色切換）
+            role_registry: 角色註冊表（008 角色切換）
+            state: 對話狀態（可選，預設自動建立）
         """
         self.config = config
         self.llm_client = llm_client
-        self.state = ConversationState()
+        self.state = state if state is not None else ConversationState()
+
+        # 008: 角色切換支援
+        self.intent_recognizer = intent_recognizer
+        self.role_registry = role_registry
 
         # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
         self.tool_registry = ToolRegistry() if tool_registry is None else tool_registry
@@ -140,11 +150,48 @@ class VoicePipeline:
             speed=config.tts.speed,
         )
 
+    def switch_role(self, role):
+        """切換當前角色
+
+        Args:
+            role: 角色物件
+
+        Returns:
+            bool: 切換是否成功
+        """
+        if not role or not hasattr(role, "id"):
+            return False
+        self.state.current_role_id = role.id
+        logger.info(
+            f"[Pipeline] 角色已切換為: "
+            f"{role.name if hasattr(role, 'name') else role.id}"
+        )
+        return True
+
+    def _get_current_system_prompt(self) -> str:
+        """取得當前角色的 system_prompt
+
+        Returns:
+            system_prompt 字串
+        """
+        if self.role_registry and self.state.current_role_id:
+            try:
+                current_role = self.role_registry.get(self.state.current_role_id)
+                logger.debug(
+                    f"[Pipeline] 使用角色 {current_role.name} 的 system_prompt"
+                )
+                return current_role.system_prompt
+            except Exception as e:
+                logger.warning(f"[Pipeline] 無法取得當前角色的 system_prompt: {e}")
+
+        return self.DEFAULT_SYSTEM_PROMPT
+
     async def _process_tool_calls(
         self,
         messages: list[ChatMessage],
         llm_response: ChatMessage,
         tools: list[dict],
+        system_prompt: str | None = None,
     ) -> str:
         """處理 LLM 的 Tool Calls 回應
 
@@ -152,6 +199,7 @@ class VoicePipeline:
             messages: 目前的對話訊息列表
             llm_response: LLM 回應（可能包含 tool_calls）
             tools: 工具定義列表
+            system_prompt: 系統提示詞
 
         Returns:
             最終的文字回應
@@ -200,7 +248,9 @@ class VoicePipeline:
 
         # 再次呼叫 LLM 產生最終回應
         final_response = await self.llm_client.chat(
-            messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+            messages,
+            tools=tools,
+            system_prompt=system_prompt or self._get_current_system_prompt(),
         )
 
         return final_response.content or ""
@@ -248,131 +298,19 @@ class VoicePipeline:
         user_message = ChatMessage(role="user", content=user_text)
         messages = [user_message]
 
-        # 取得工具定義
+        # 取得工具定義和當前 system_prompt
         tools = self.tool_registry.get_openai_tools()
+        system_prompt = self._get_current_system_prompt()
 
         # 第一次 LLM 呼叫
         llm_response = await self.llm_client.chat(
-            messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
+            messages, tools=tools, system_prompt=system_prompt
         )
 
         # 處理 Tool Calls（如果有）
-        return await self._process_tool_calls(messages, llm_response, tools)
-
-    def process_audio(
-        self,
-        audio: tuple[int, NDArray[np.float32]],
-    ) -> Iterator[tuple[int, NDArray[np.float32]]]:
-        """處理音訊輸入，回傳語音回應串流
-
-        這是 FastRTC ReplyOnPause handler 的主要進入點。
-
-        Args:
-            audio: (sample_rate, audio_array) 使用者語音
-
-        Yields:
-            (sample_rate, audio_chunk) 助理語音回應
-        """
-        # 更新狀態為處理中
-        self.state.transition_to(VoiceState.PROCESSING)
-        sample_rate, audio_array = audio
-        logger.info(
-            f"[Pipeline] 收到音訊: sample_rate={sample_rate}, "
-            f"shape={audio_array.shape}, dtype={audio_array.dtype}"
+        return await self._process_tool_calls(
+            messages, llm_response, tools, system_prompt
         )
-
-        try:
-            # 1. 語音轉文字
-            logger.info("[Pipeline] 開始 STT 辨識...")
-            user_text = self.stt.stt(audio)
-            logger.debug(f"[Pipeline] STT 結果: '{_truncate_for_log(user_text)}'")
-
-            if not user_text.strip():
-                # 無有效輸入，回到待命
-                logger.info("[Pipeline] 無有效語音輸入，跳過")
-                self.state.transition_to(VoiceState.IDLE)
-                return
-
-            self.state.last_user_text = user_text
-
-            # 2. LLM 處理（含 Tool Calling）
-            logger.debug(f"[Pipeline] 呼叫 LLM: '{_truncate_for_log(user_text)}'")
-            user_message = ChatMessage(role="user", content=user_text)
-            messages = [user_message]
-
-            # 取得工具定義
-            tools = self.tool_registry.get_openai_tools()
-
-            # 第一次 LLM 呼叫
-            llm_response = _run_async_safely(
-                self.llm_client.chat(
-                    messages, tools=tools, system_prompt=self.SYSTEM_PROMPT
-                )
-            )
-
-            # 處理 Tool Calls（如果有）
-            response = _run_async_safely(
-                self._process_tool_calls(messages, llm_response, tools)
-            )
-            logger.debug(f"[Pipeline] LLM 回應: '{_truncate_for_log(response)}'")
-            self.state.last_assistant_text = response
-
-            # 3. 更新狀態為回應中
-            self.state.transition_to(VoiceState.SPEAKING)
-            self.state.turn_count += 1
-
-            # 4. TTS 串流輸出
-            logger.info("[Pipeline] 開始 TTS 串流...")
-            chunk_count = 0
-            interrupted = False
-            for audio_chunk in self.tts.stream_tts_sync(response):
-                # 檢查是否被中斷（僅當 can_interrupt 啟用時）
-                if (
-                    self.config.can_interrupt
-                    and self.state.state == VoiceState.INTERRUPTED
-                ):
-                    logger.info("[Pipeline] TTS 被中斷，停止輸出")
-                    interrupted = True
-                    break
-                chunk_count += 1
-                yield audio_chunk
-
-            if interrupted:
-                logger.info(f"[Pipeline] TTS 中斷於第 {chunk_count} 個音訊片段")
-            else:
-                logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")
-
-            # 5. 回應完成，回到待命
-            self.state.transition_to(VoiceState.IDLE)
-
-        except Exception as e:
-            # 錯誤處理：播放錯誤提示，不再重新拋出以維持串流
-            logger.error(f"[Pipeline] 處理錯誤: {e}", exc_info=True)
-            error_message = "抱歉，處理時發生錯誤，請再試一次。"
-            try:
-                for audio_chunk in self.tts.stream_tts_sync(error_message):
-                    yield audio_chunk
-            except Exception as tts_error:
-                logger.error(f"[Pipeline] 錯誤訊息 TTS 失敗: {tts_error}")
-            finally:
-                self.state.transition_to(VoiceState.IDLE)
-
-    def on_interrupt(self) -> None:
-        """處理使用者中斷
-
-        當使用者在助理回應時開始說話，由 FastRTC 呼叫。
-        """
-        if self.state.state == VoiceState.SPEAKING:
-            self.state.transition_to(VoiceState.INTERRUPTED)
-            # FastRTC 會自動停止播放
-
-    def get_state(self) -> ConversationState:
-        """取得目前對話狀態"""
-        return self.state
-
-    def reset(self) -> None:
-        """重置對話狀態"""
-        self.state = ConversationState()
 
     def process_audio_with_outputs(
         self,
@@ -381,7 +319,7 @@ class VoicePipeline:
         """處理音訊輸入，回傳語音回應串流與 UI 更新
 
         這是支援 AdditionalOutputs 的 FastRTC handler，
-        用於同步更新 Gradio UI 元件。
+        用於同步更新 Gradio UI 元件，並支援角色切換。
 
         Args:
             audio: (sample_rate, audio_array) 使用者語音
@@ -420,6 +358,96 @@ class VoicePipeline:
                 )
                 return
 
+            # --------- 008: INTENT 辨識（角色切換） ---------
+            if self.intent_recognizer is not None and self.role_registry is not None:
+                try:
+                    intent = _run_async_safely(
+                        self.intent_recognizer.recognize_intent_with_llm(user_text)
+                    )
+                except Exception as e:
+                    logger.error(f"[Pipeline] 辨識意圖失敗：{e}")
+                    intent = None
+
+                logger.debug(
+                    f"[Intent] 輸入: user_text='{_truncate_for_log(user_text)}' "
+                    f"intent={getattr(intent, 'name', None)} "
+                    f"params={getattr(intent, 'params', None)}"
+                )
+
+                if (
+                    intent is not None
+                    and getattr(intent, "name", None) == "switch_role"
+                    and hasattr(intent, "params")
+                ):
+                    logger.info("[Pipeline] 偵測到角色切換指令")
+                    role_id = intent.params.get("role_id")
+
+                    # 允許用 display_name（如「助理」）自動映射 ID
+                    if role_id and role_id not in self.role_registry._roles:
+                        mapped_id = self.role_registry.get_id_by_name(role_id)
+                        if mapped_id:
+                            logger.info(
+                                f"[Pipeline] name→ID 映射: {role_id} -> {mapped_id}"
+                            )
+                            role_id = mapped_id
+
+                    role = self.role_registry.get(role_id) if role_id else None
+
+                    if role:
+                        logger.info(
+                            f"[Pipeline] 切換到角色: {getattr(role, 'name', role_id)}"
+                        )
+                        result = self.switch_role(role)
+
+                        if result:
+                            # 先嘗試抓角色的歡迎詞，有則優先用；沒有才 fallback
+                            welcome_txt = (
+                                role.get_welcome_message()
+                                if hasattr(role, "get_welcome_message")
+                                else None
+                            )
+                            if welcome_txt:
+                                # TTS 播放原始歡迎語（無分隔符）
+                                tts_txt = welcome_txt
+                                # 對話框顯示時加入視覺分隔，提升辨識度
+                                display_txt = f"---\n\n{welcome_txt}"
+                                role_name = getattr(role, "name", "未知角色")
+                                status_txt = f"🟢 已切換為『{role_name}』模式"
+                            else:
+                                role_name = getattr(role, "name", "未知角色")
+                                tts_txt = f"已切換為『{role_name}』模式, 請繼續提問"
+                                display_txt = (
+                                    f"---\n\n已切換為『{role_name}』模式, 請繼續提問"
+                                )
+                                status_txt = f"🟢 已切換為『{role_name}』模式"
+                        else:
+                            tts_txt = (
+                                self.state.last_assistant_text
+                                or "角色設定異常，請確認後再試一次。"
+                            )
+                            display_txt = tts_txt
+                            status_txt = f"⚠️ {tts_txt}"
+                    else:
+                        tts_txt = "查無此角色，請再說一次或從選單切換。"
+                        display_txt = tts_txt
+                        status_txt = f"⚠️ {tts_txt}"
+
+                    # 播放 TTS 確認訊息（使用無分隔符版本）
+                    for audio_chunk in self.tts.stream_tts_sync(tts_txt):
+                        yield audio_chunk
+
+                    self.state.last_assistant_text = display_txt
+                    self.state.history.add_assistant_message(display_txt)
+                    self.state.transition_to(VoiceState.IDLE)
+                    yield AdditionalOutputs(
+                        self.state.get_gradio_messages(), status_txt
+                    )
+                    logger.debug("[Pipeline] 角色切換完成，結束處理")
+                    return
+
+                # 不是 switch_role intent 時，進入主流程處理
+                logger.info("[Pipeline] 進入一般對話流程")
+
             # T013: STT 完成後更新 history
             self.state.last_user_text = user_text
             self.state.history.add_user_message(user_text)
@@ -434,10 +462,30 @@ class VoicePipeline:
             # 2. 根據 flow_mode 處理輸入
             logger.debug(f"[Pipeline] 處理輸入: '{_truncate_for_log(user_text)}'")
 
-            if self.flow_mode == FlowMode.MULTI_AGENT:
+            # 決定有效的流程模式（角色專屬 > 全域設定）
+            effective_flow_mode = self.flow_mode  # 預設使用全域設定
+            if self.role_registry and self.state.current_role_id:
+                current_role = self.role_registry.get(self.state.current_role_id)
+                if (
+                    current_role
+                    and hasattr(current_role, "preferred_flow_mode")
+                    and current_role.preferred_flow_mode
+                ):
+                    effective_flow_mode = FlowMode(current_role.preferred_flow_mode)
+                    logger.info(
+                        f"[Pipeline] 使用角色專屬流程模式: {effective_flow_mode.value}"
+                    )
+                else:
+                    logger.info(
+                        f"[Pipeline] 使用全域流程模式: {effective_flow_mode.value}"
+                    )
+            else:
+                logger.info(f"[Pipeline] 使用全域流程模式: {effective_flow_mode.value}")
+
+            if effective_flow_mode == FlowMode.MULTI_AGENT:
                 # 使用 Multi-Agent 流程
                 response = _run_async_safely(self._process_with_multi_agent(user_text))
-            elif self.flow_mode == FlowMode.LANGGRAPH:
+            elif effective_flow_mode == FlowMode.LANGGRAPH:
                 # 使用 LangGraph 流程
                 response = _run_async_safely(self._process_with_flow(user_text))
             else:
@@ -514,3 +562,20 @@ class VoicePipeline:
                     self.state.get_gradio_messages(),
                     self.state.get_ui_state().status_text,
                 )
+
+    def on_interrupt(self) -> None:
+        """處理使用者中斷
+
+        當使用者在助理回應時開始說話，由 FastRTC 呼叫。
+        """
+        if self.state.state == VoiceState.SPEAKING:
+            self.state.transition_to(VoiceState.INTERRUPTED)
+            # FastRTC 會自動停止播放
+
+    def get_state(self) -> ConversationState:
+        """取得目前對話狀態"""
+        return self.state
+
+    def reset(self) -> None:
+        """重置對話狀態"""
+        self.state = ConversationState()
