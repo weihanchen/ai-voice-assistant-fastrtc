@@ -6,11 +6,12 @@
 from __future__ import annotations
 
 from voice_assistant.agents.graph import create_multi_agent_graph
+from voice_assistant.flows.base import BaseFlowExecutor
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.tools.registry import ToolRegistry
 
 
-class MultiAgentExecutor:
+class MultiAgentExecutor(BaseFlowExecutor):
     """多代理流程執行器。
 
     整合 Multi-Agent Graph，提供統一的執行介面。
@@ -29,6 +30,11 @@ class MultiAgentExecutor:
         self._llm_client = llm_client
         self._tool_registry = tool_registry
         self._graph = create_multi_agent_graph(llm_client, tool_registry)
+
+    @property
+    def flow_name(self) -> str:
+        """流程名稱。"""
+        return "multi_agent"
 
     async def execute(self, user_input: str) -> str:
         """執行多代理流程。

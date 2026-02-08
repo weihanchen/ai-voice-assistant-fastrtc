@@ -7,7 +7,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from voice_assistant.flows.base import BaseFlowExecutor
+from voice_assistant.flows.exceptions import FlowNotFoundError
 from voice_assistant.flows.graphs.main_router import create_main_router_graph
+from voice_assistant.flows.registry import FlowRegistry
 from voice_assistant.flows.state import (
     CITY_RECOMMENDATIONS,
     FlowState,
@@ -17,6 +20,7 @@ from voice_assistant.flows.state import (
     WeatherInfo,
     is_weather_suitable,
 )
+from voice_assistant.flows.tool_calling_executor import ToolCallingExecutor
 from voice_assistant.flows.visualization import get_mermaid_diagram
 
 if TYPE_CHECKING:
@@ -24,7 +28,7 @@ if TYPE_CHECKING:
     from voice_assistant.tools.registry import ToolRegistry
 
 
-class FlowExecutor:
+class FlowExecutor(BaseFlowExecutor):
     """LangGraph 流程執行器。
 
     提供對話流程的執行與視覺化功能。
@@ -44,6 +48,11 @@ class FlowExecutor:
         self.llm_client = llm_client
         self.tool_registry = tool_registry
         self._graph = create_main_router_graph(llm_client, tool_registry)
+
+    @property
+    def flow_name(self) -> str:
+        """流程名稱。"""
+        return "langgraph"
 
     async def execute(self, user_input: str) -> str:
         """執行對話流程。
@@ -75,11 +84,15 @@ class FlowExecutor:
 
 
 __all__ = [
+    "BaseFlowExecutor",
     "CITY_RECOMMENDATIONS",
     "FlowExecutor",
+    "FlowNotFoundError",
+    "FlowRegistry",
     "FlowState",
     "IntentType",
     "RecommendationType",
+    "ToolCallingExecutor",
     "TravelPlanState",
     "WeatherInfo",
     "is_weather_suitable",

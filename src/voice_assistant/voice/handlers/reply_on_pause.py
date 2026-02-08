@@ -9,7 +9,9 @@ import gradio as gr
 import numpy as np
 from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream, WebRTC
 
+from voice_assistant.agents import MultiAgentExecutor
 from voice_assistant.config import Settings
+from voice_assistant.flows import FlowExecutor, FlowRegistry, ToolCallingExecutor
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.roles.predefined.assistant import AssistantRole
 from voice_assistant.roles.predefined.coach import CoachRole
@@ -83,6 +85,26 @@ def create_voice_stream(settings: Settings) -> Stream:
     tool_registry.register(ExchangeRateTool())
     tool_registry.register(StockPriceTool())
 
+    # 009: 建立 FlowRegistry 並註冊所有流程執行器
+    # 注意：ToolCallingExecutor 的 system_prompt_provider 使用 late-binding，
+    # 在 pipeline 建立後會自動引用 pipeline._get_current_system_prompt
+    _pipeline_ref: list[VoicePipeline | None] = [None]
+
+    flow_registry = FlowRegistry()
+    flow_registry.register(
+        ToolCallingExecutor(
+            llm_client=llm_client,
+            tool_registry=tool_registry,
+            system_prompt_provider=lambda: (
+                _pipeline_ref[0]._get_current_system_prompt()
+                if _pipeline_ref[0] is not None
+                else VoicePipeline.DEFAULT_SYSTEM_PROMPT
+            ),
+        )
+    )
+    flow_registry.register(FlowExecutor(llm_client, tool_registry))
+    flow_registry.register(MultiAgentExecutor(llm_client, tool_registry))
+
     # ----------
     # 初始化角色註冊表與預設角色
     role_registry = RoleRegistry()
@@ -107,14 +129,17 @@ def create_voice_stream(settings: Settings) -> Stream:
 
     intent_recognizer = IntentRecognizer(llm_client)
 
-    # 初始化語音管線（使用正確的 007 + 008 整合版本）
+    # 初始化語音管線（使用 009 FlowRegistry 統一流程介面）
     pipeline = VoicePipeline(
         config=config,
         llm_client=llm_client,
         tool_registry=tool_registry,
         intent_recognizer=intent_recognizer,
         role_registry=role_registry,
+        flow_registry=flow_registry,
     )
+    # 設定 late-binding 參考，讓 ToolCallingExecutor 使用角色感知的 system_prompt
+    _pipeline_ref[0] = pipeline
     # 啟動階段先設置預設角色
     if default_role_id:
         pipeline.switch_role(role_registry.get(default_role_id))

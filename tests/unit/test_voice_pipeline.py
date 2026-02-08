@@ -86,8 +86,27 @@ class TestVoicePipeline:
     @pytest.fixture
     def pipeline(self, mock_llm, mock_stt, mock_tts, mock_settings, mocker):
         """建立測試用 Pipeline"""
+        from voice_assistant.flows.registry import FlowRegistry
+        from voice_assistant.flows.tool_calling_executor import ToolCallingExecutor
+        from voice_assistant.tools.registry import ToolRegistry
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import ConversationState, VoicePipelineConfig
+
+        # 建立 FlowRegistry 並註冊 ToolCallingExecutor（使用 mock LLM）
+        flow_registry = FlowRegistry()
+        flow_registry.register(
+            ToolCallingExecutor(
+                llm_client=mock_llm,
+                tool_registry=ToolRegistry(),
+                system_prompt_provider=lambda: "測試用系統提示詞",
+            )
+        )
+
+        # Patch get_settings 回傳 tools 模式（匹配已註冊的 executor）
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         return VoicePipeline(
             state=ConversationState(),
@@ -95,6 +114,7 @@ class TestVoicePipeline:
             llm_client=mock_llm,
             stt=mock_stt,
             tts=mock_tts,
+            flow_registry=flow_registry,
         )
 
     def test_pipeline_initial_state_is_idle(self, pipeline):
@@ -166,9 +186,8 @@ class TestVoicePipeline:
         list(pipeline.process_audio_with_outputs(audio))
         assert mock_llm.chat.call_count >= 1
         last_call = mock_llm.chat.call_args_list[-1]
-        kwargs = last_call[1]
-        assert "messages" in kwargs
-        messages = kwargs["messages"]
+        # ToolCallingExecutor 以位置參數傳遞 messages
+        messages = last_call[0][0] if last_call[0] else last_call[1]["messages"]
         assert len(messages) == 1
         assert messages[0].content == "這是測試輸入"
 

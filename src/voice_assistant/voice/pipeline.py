@@ -4,7 +4,6 @@
 """
 
 import asyncio
-import json
 import logging
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
@@ -13,10 +12,8 @@ import numpy as np
 from fastrtc import AdditionalOutputs
 from numpy.typing import NDArray
 
-from voice_assistant.agents import MultiAgentExecutor
 from voice_assistant.config import FlowMode, get_settings
-from voice_assistant.flows import FlowExecutor
-from voice_assistant.llm.schemas import ChatMessage
+from voice_assistant.flows.registry import FlowRegistry
 from voice_assistant.tools.registry import ToolRegistry
 from voice_assistant.voice.schemas import (
     ConversationState,
@@ -89,6 +86,7 @@ class VoicePipeline:
         intent_recognizer=None,
         role_registry=None,
         state: ConversationState | None = None,
+        flow_registry: FlowRegistry | None = None,
     ):
         """初始化語音管線
 
@@ -101,6 +99,7 @@ class VoicePipeline:
             intent_recognizer: 意圖辨識器（008 角色切換）
             role_registry: 角色註冊表（008 角色切換）
             state: 對話狀態（可選，預設自動建立）
+            flow_registry: 流程註冊表（009 統一流程介面）
         """
         self.config = config
         self.llm_client = llm_client
@@ -113,24 +112,13 @@ class VoicePipeline:
         # 初始化 ToolRegistry（由外部注入，Pipeline 不依賴特定工具）
         self.tool_registry = ToolRegistry() if tool_registry is None else tool_registry
 
+        # 009: 統一流程介面 — 使用 FlowRegistry 取代個別 executor
+        self.flow_registry = flow_registry or FlowRegistry()
+
         # 取得流程模式設定
         settings = get_settings()
         self.flow_mode = settings.flow_mode
-        logger.info(f"[Pipeline] 流程模式: {self.flow_mode.value}")
-
-        # 初始化 FlowExecutor（LangGraph 流程）
-        self.flow_executor: FlowExecutor | None = None
-        if self.flow_mode == FlowMode.LANGGRAPH:
-            self.flow_executor = FlowExecutor(llm_client, self.tool_registry)
-            logger.info("[Pipeline] LangGraph 流程已啟用")
-
-        # 初始化 MultiAgentExecutor（多代理協作）
-        self.multi_agent_executor: MultiAgentExecutor | None = None
-        if self.flow_mode == FlowMode.MULTI_AGENT:
-            self.multi_agent_executor = MultiAgentExecutor(
-                llm_client, self.tool_registry
-            )
-            logger.info("[Pipeline] Multi-Agent 流程已啟用")
+        logger.info("[Pipeline] 流程模式: %s", self.flow_mode.value)
 
         # 初始化 STT
         self.stt = stt or WhisperSTT(
@@ -186,131 +174,50 @@ class VoicePipeline:
 
         return self.DEFAULT_SYSTEM_PROMPT
 
-    async def _process_tool_calls(
-        self,
-        messages: list[ChatMessage],
-        llm_response: ChatMessage,
-        tools: list[dict],
-        system_prompt: str | None = None,
-    ) -> str:
-        """處理 LLM 的 Tool Calls 回應
+    async def _process_with_executor(self, user_text: str) -> str:
+        """使用 FlowRegistry 中的執行器處理使用者輸入。
+
+        根據有效的流程模式（角色專屬 > 全域設定），
+        從 FlowRegistry 取得對應的執行器並執行。
 
         Args:
-            messages: 目前的對話訊息列表
-            llm_response: LLM 回應（可能包含 tool_calls）
-            tools: 工具定義列表
-            system_prompt: 系統提示詞
+            user_text: 使用者輸入文字
 
         Returns:
-            最終的文字回應
+            回應文字
         """
-        # 如果沒有 tool_calls，直接回傳內容
-        if not llm_response.tool_calls:
-            return llm_response.content or ""
-
-        logger.info(
-            f"[Pipeline] LLM 要求呼叫工具: "
-            f"{[tc.function['name'] for tc in llm_response.tool_calls]}"
-        )
-
-        # 加入 assistant 訊息（包含 tool_calls）
-        messages.append(llm_response)
-
-        # 執行每個 tool call
-        for tool_call in llm_response.tool_calls:
-            tool_name = tool_call.function["name"]
-            try:
-                arguments = json.loads(tool_call.function["arguments"])
-            except json.JSONDecodeError as e:
-                # JSON 解析失敗時，回傳錯誤訊息給 LLM
-                logger.warning(f"[Pipeline] 工具參數 JSON 解析失敗: {e}")
-                tool_message = ChatMessage(
-                    role="tool",
-                    content="Error: 無法解析工具參數",
-                    tool_call_id=tool_call.id,
+        # 決定有效的流程模式（角色專屬 > 全域設定）
+        effective_flow_mode = self.flow_mode  # 預設使用全域設定
+        if self.role_registry and self.state.current_role_id:
+            current_role = self.role_registry.get(self.state.current_role_id)
+            if (
+                current_role
+                and hasattr(current_role, "preferred_flow_mode")
+                and current_role.preferred_flow_mode
+            ):
+                effective_flow_mode = FlowMode(current_role.preferred_flow_mode)
+                logger.info(
+                    "[Pipeline] 使用角色專屬流程模式: %s", effective_flow_mode.value
                 )
-                messages.append(tool_message)
-                continue
+            else:
+                logger.info(
+                    "[Pipeline] 使用全域流程模式: %s", effective_flow_mode.value
+                )
+        else:
+            logger.info("[Pipeline] 使用全域流程模式: %s", effective_flow_mode.value)
 
-            logger.info(f"[Pipeline] 執行工具 {tool_name}")
-
-            # 執行工具
-            result = await self.tool_registry.execute(tool_name, arguments)
-            logger.info("[Pipeline] 工具執行完成")
-
-            # 加入 tool 結果訊息
-            tool_message = ChatMessage(
-                role="tool",
-                content=result.to_content(),
-                tool_call_id=tool_call.id,
+        # 透過 FlowRegistry 取得對應的執行器（含 fallback）
+        flow_name = effective_flow_mode.value
+        if not self.flow_registry.has(flow_name):
+            logger.warning(
+                "[Pipeline] 流程 %r 不存在，fallback 至 %s",
+                flow_name,
+                self.flow_mode.value,
             )
-            messages.append(tool_message)
-
-        # 再次呼叫 LLM 產生最終回應
-        final_response = await self.llm_client.chat(
-            messages,
-            tools=tools,
-            system_prompt=system_prompt or self._get_current_system_prompt(),
-        )
-
-        return final_response.content or ""
-
-    async def _process_with_flow(self, user_text: str) -> str:
-        """使用 LangGraph 流程處理使用者輸入
-
-        Args:
-            user_text: 使用者輸入文字
-
-        Returns:
-            回應文字
-        """
-        if self.flow_executor is None:
-            raise RuntimeError("FlowExecutor 未初始化")
-
-        logger.info("[Pipeline] 使用 LangGraph 流程處理")
-        return await self.flow_executor.execute(user_text)
-
-    async def _process_with_multi_agent(self, user_text: str) -> str:
-        """使用 Multi-Agent 流程處理使用者輸入
-
-        Args:
-            user_text: 使用者輸入文字
-
-        Returns:
-            回應文字
-        """
-        if self.multi_agent_executor is None:
-            raise RuntimeError("MultiAgentExecutor 未初始化")
-
-        logger.info("[Pipeline] 使用 Multi-Agent 流程處理")
-        return await self.multi_agent_executor.execute(user_text)
-
-    async def _process_with_legacy(self, user_text: str) -> str:
-        """使用舊版 Tool Calling 處理使用者輸入（降級模式）
-
-        Args:
-            user_text: 使用者輸入文字
-
-        Returns:
-            回應文字
-        """
-        logger.info("[Pipeline] 使用舊版 Tool Calling 處理")
-        user_message = ChatMessage(role="user", content=user_text)
-        messages = [user_message]
-
-        # 取得工具定義和當前 system_prompt
-        tools = self.tool_registry.get_openai_tools()
-        system_prompt = self._get_current_system_prompt()
-
-        # 第一次 LLM 呼叫
-        llm_response = await self.llm_client.chat(
-            messages, tools=tools, system_prompt=system_prompt
-        )
-
-        # 處理 Tool Calls（如果有）
-        return await self._process_tool_calls(
-            messages, llm_response, tools, system_prompt
-        )
+            flow_name = self.flow_mode.value
+        executor = self.flow_registry.get(flow_name)
+        logger.info("[Pipeline] 使用流程執行器: %s", executor.flow_name)
+        return await executor.execute(user_text)
 
     def process_audio_with_outputs(
         self,
@@ -459,38 +366,9 @@ class VoicePipeline:
                 self.state.get_ui_state().status_text,
             )
 
-            # 2. 根據 flow_mode 處理輸入
+            # 2. 根據 flow_mode 處理輸入（透過 FlowRegistry 統一調度）
             logger.debug(f"[Pipeline] 處理輸入: '{_truncate_for_log(user_text)}'")
-
-            # 決定有效的流程模式（角色專屬 > 全域設定）
-            effective_flow_mode = self.flow_mode  # 預設使用全域設定
-            if self.role_registry and self.state.current_role_id:
-                current_role = self.role_registry.get(self.state.current_role_id)
-                if (
-                    current_role
-                    and hasattr(current_role, "preferred_flow_mode")
-                    and current_role.preferred_flow_mode
-                ):
-                    effective_flow_mode = FlowMode(current_role.preferred_flow_mode)
-                    logger.info(
-                        f"[Pipeline] 使用角色專屬流程模式: {effective_flow_mode.value}"
-                    )
-                else:
-                    logger.info(
-                        f"[Pipeline] 使用全域流程模式: {effective_flow_mode.value}"
-                    )
-            else:
-                logger.info(f"[Pipeline] 使用全域流程模式: {effective_flow_mode.value}")
-
-            if effective_flow_mode == FlowMode.MULTI_AGENT:
-                # 使用 Multi-Agent 流程
-                response = _run_async_safely(self._process_with_multi_agent(user_text))
-            elif effective_flow_mode == FlowMode.LANGGRAPH:
-                # 使用 LangGraph 流程
-                response = _run_async_safely(self._process_with_flow(user_text))
-            else:
-                # FlowMode.TOOLS - 使用純 Tool Calling
-                response = _run_async_safely(self._process_with_legacy(user_text))
+            response = _run_async_safely(self._process_with_executor(user_text))
 
             logger.debug(f"[Pipeline] 回應: '{_truncate_for_log(response)}'")
 
