@@ -191,6 +191,21 @@ class TestVoicePipeline:
         assert len(messages) == 1
         assert messages[0].content == "這是測試輸入"
 
+    def test_additional_outputs_include_flow_viz(self, pipeline):
+        """AdditionalOutputs 包含流程視覺化 HTML（3 個引數）"""
+        audio = (16000, np.zeros(16000, dtype=np.float32))
+        chunks = list(pipeline.process_audio_with_outputs(audio))
+
+        ui_chunks = [c for c in chunks if isinstance(c, AdditionalOutputs)]
+        assert ui_chunks, "應有 AdditionalOutputs"
+
+        for ao in ui_chunks:
+            assert len(ao.args) == 3, "AdditionalOutputs 應有 3 個引數"
+            history, status, flow_viz = ao.args
+            assert isinstance(history, list)
+            assert isinstance(status, str)
+            assert isinstance(flow_viz, str)
+
     def test_process_audio_yields_tts_output(self, pipeline):
         """處理音訊會產生 TTS 輸出"""
         audio = (16000, np.zeros(16000, dtype=np.float32))

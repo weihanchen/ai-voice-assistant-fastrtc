@@ -9,6 +9,8 @@ from voice_assistant.voice.ui.blocks import (
     create_additional_outputs,
     create_audio_input,
     create_custom_ui,
+    create_flow_visualization,
+    update_flow_visualization,
 )
 
 __all__ = [
@@ -17,4 +19,6 @@ __all__ = [
     "create_additional_outputs",
     "create_audio_input",
     "create_custom_ui",
+    "create_flow_visualization",
+    "update_flow_visualization",
 ]

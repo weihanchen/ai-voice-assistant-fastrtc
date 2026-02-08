@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from voice_assistant.agents.graph import create_multi_agent_graph
 from voice_assistant.flows.base import BaseFlowExecutor
+from voice_assistant.flows.visualization import get_mermaid_diagram
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.tools.registry import ToolRegistry
 
@@ -52,3 +53,11 @@ class MultiAgentExecutor(BaseFlowExecutor):
             return result.get("final_response", "抱歉，處理過程中發生錯誤。")
         except Exception as e:
             return f"抱歉，處理過程中發生錯誤: {e}"
+
+    def get_visualization(self) -> str:
+        """取得多代理流程視覺化 Mermaid 圖。
+
+        Returns:
+            Mermaid 格式字串
+        """
+        return get_mermaid_diagram(self._graph)

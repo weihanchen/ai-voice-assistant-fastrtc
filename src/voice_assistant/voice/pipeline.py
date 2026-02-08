@@ -14,6 +14,7 @@ from numpy.typing import NDArray
 
 from voice_assistant.config import FlowMode, get_settings
 from voice_assistant.flows.registry import FlowRegistry
+from voice_assistant.flows.visualization import NodeStatus, render_mermaid_with_status
 from voice_assistant.tools.registry import ToolRegistry
 from voice_assistant.voice.schemas import (
     ConversationState,
@@ -22,6 +23,7 @@ from voice_assistant.voice.schemas import (
 )
 from voice_assistant.voice.stt.whisper import WhisperSTT
 from voice_assistant.voice.tts.kokoro import KokoroTTS
+from voice_assistant.voice.ui.blocks import update_flow_visualization
 
 # 設定 logging
 logging.basicConfig(level=logging.INFO)
@@ -174,6 +176,34 @@ class VoicePipeline:
 
         return self.DEFAULT_SYSTEM_PROMPT
 
+    def _get_flow_viz_html(
+        self,
+        node_statuses: dict[str, NodeStatus] | None = None,
+    ) -> str:
+        """取得目前流程執行器的視覺化 HTML。
+
+        根據流程模式取得對應的 Mermaid 圖表，並注入節點狀態後轉換為 HTML。
+
+        Args:
+            node_statuses: 節點狀態映射，為 None 時不注入狀態
+
+        Returns:
+            流程視覺化 HTML 字串
+        """
+        try:
+            flow_name = self.flow_mode.value
+            if self.flow_registry.has(flow_name):
+                executor = self.flow_registry.get(flow_name)
+                mermaid_code = executor.get_visualization()
+                if mermaid_code and node_statuses:
+                    mermaid_code = render_mermaid_with_status(
+                        mermaid_code, node_statuses
+                    )
+                return update_flow_visualization(mermaid_code)
+        except Exception as e:
+            logger.warning(f"[Pipeline] 流程視覺化取得失敗: {e}")
+        return update_flow_visualization(None)
+
     async def _process_with_executor(self, user_text: str) -> str:
         """使用 FlowRegistry 中的執行器處理使用者輸入。
 
@@ -244,9 +274,11 @@ class VoicePipeline:
         )
 
         # 發送初始狀態更新
+        flow_viz_html = self._get_flow_viz_html()
         yield AdditionalOutputs(
             self.state.get_gradio_messages(),
             self.state.get_ui_state().status_text,
+            flow_viz_html,
         )
 
         try:
@@ -262,6 +294,7 @@ class VoicePipeline:
                 yield AdditionalOutputs(
                     self.state.get_gradio_messages(),
                     self.state.get_ui_state().status_text,
+                    flow_viz_html,
                 )
                 return
 
@@ -347,7 +380,9 @@ class VoicePipeline:
                     self.state.history.add_assistant_message(display_txt)
                     self.state.transition_to(VoiceState.IDLE)
                     yield AdditionalOutputs(
-                        self.state.get_gradio_messages(), status_txt
+                        self.state.get_gradio_messages(),
+                        status_txt,
+                        flow_viz_html,
                     )
                     logger.debug("[Pipeline] 角色切換完成，結束處理")
                     return
@@ -364,6 +399,7 @@ class VoicePipeline:
             yield AdditionalOutputs(
                 self.state.get_gradio_messages(),
                 self.state.get_ui_state().status_text,
+                flow_viz_html,
             )
 
             # 2. 根據 flow_mode 處理輸入（透過 FlowRegistry 統一調度）
@@ -384,6 +420,7 @@ class VoicePipeline:
             yield AdditionalOutputs(
                 self.state.get_gradio_messages(),
                 self.state.get_ui_state().status_text,
+                flow_viz_html,
             )
 
             # 4. TTS 串流輸出
@@ -407,6 +444,7 @@ class VoicePipeline:
                 yield AdditionalOutputs(
                     self.state.get_gradio_messages(),
                     "⏸️ 已中斷",
+                    flow_viz_html,
                 )
             else:
                 logger.info(f"[Pipeline] TTS 完成，共 {chunk_count} 個音訊片段")
@@ -416,6 +454,7 @@ class VoicePipeline:
             yield AdditionalOutputs(
                 self.state.get_gradio_messages(),
                 self.state.get_ui_state().status_text,
+                flow_viz_html,
             )
 
         except Exception as e:
@@ -427,6 +466,7 @@ class VoicePipeline:
             yield AdditionalOutputs(
                 self.state.get_gradio_messages(),
                 "❌ 發生錯誤",
+                flow_viz_html,
             )
 
             try:
@@ -439,6 +479,7 @@ class VoicePipeline:
                 yield AdditionalOutputs(
                     self.state.get_gradio_messages(),
                     self.state.get_ui_state().status_text,
+                    flow_viz_html,
                 )
 
     def on_interrupt(self) -> None:

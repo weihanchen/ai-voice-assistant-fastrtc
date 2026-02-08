@@ -123,33 +123,33 @@
 
 ### Tool 自動掃描
 
-- [ ] T019 [US3] 實作 `ToolRegistry.auto_discover()` in `src/voice_assistant/tools/registry.py`
+- [x] T019 [US3] 實作 `ToolRegistry.auto_discover()` in `src/voice_assistant/tools/registry.py`
   - 使用 `importlib` + `inspect` 掃描指定套件下的 `BaseTool` 子類別
   - 過濾掉 `BaseTool` 本身（ABC 不註冊）
   - 記錄 import 錯誤為 warning log，不中斷掃描
   - 回傳已註冊的工具名稱列表
-- [ ] T020 [P] [US3] 撰寫 auto_discover 單元測試 in `tests/unit/tools/test_auto_discover.py`
+- [x] T020 [P] [US3] 撰寫 auto_discover 單元測試 in `tests/unit/tools/test_auto_discover.py`
   - 測試能發現現有 3 個 Tool（WeatherTool, ExchangeRateTool, StockPriceTool）
   - 測試不會註冊 BaseTool 本身
   - 測試 import 錯誤不中斷掃描
 
 ### Agent 自動發現
 
-- [ ] T021 [US3] 實作 Agent 自動發現輔助函式 in `src/voice_assistant/agents/graph.py`
+- [x] T021 [US3] 實作 Agent 自動發現輔助函式 in `src/voice_assistant/agents/graph.py`
   - 新增 `discover_agents()` 函式掃描 `agents/` 目錄
   - 過濾 `BaseAgent` 和 `SupervisorAgent`（不自動註冊）
   - 回傳 `dict[AgentType, BaseAgent]`
-- [ ] T022 [P] [US3] 撰寫 Agent 自動發現單元測試 in `tests/unit/agents/test_auto_discover.py`
+- [x] T022 [P] [US3] 撰寫 Agent 自動發現單元測試 in `tests/unit/agents/test_auto_discover.py`
   - 測試能發現 4 個 Agent（Weather, Finance, Travel, General）
   - 測試不會註冊 BaseAgent 本身
 
 ### 更新 Composition Root
 
-- [ ] T023 [US3] 更新 `reply_on_pause.py` 使用自動掃描 in `src/voice_assistant/voice/handlers/reply_on_pause.py`
+- [x] T023 [US3] 更新 `reply_on_pause.py` 使用自動掃描 in `src/voice_assistant/voice/handlers/reply_on_pause.py`
   - `ToolRegistry` 改用 `auto_discover()` 取代手動 register
   - Agent 建立改用 `discover_agents()` 取代硬編碼 dict
-- [ ] T024 [US3] 執行全量測試 `uv run pytest` 確認向後相容
-- [ ] T025 [US3] 執行 `uv run ruff check . && uv run ruff format .` 確認程式碼品質
+- [x] T024 [US3] 執行全量測試 `uv run pytest` 確認向後相容
+- [x] T025 [US3] 執行 `uv run ruff check . && uv run ruff format .` 確認程式碼品質
 
 **Checkpoint**: User Story 3 完成 — Tool/Agent 自動註冊 ✅
 
@@ -163,40 +163,40 @@
 
 ### 視覺化資料模型
 
-- [ ] T026 [P] [US4] 建立 `FlowVisualization` 和 `NodeStatus` in `src/voice_assistant/flows/visualization.py`
+- [x] T026 [P] [US4] 建立 `FlowVisualization` 和 `NodeStatus` in `src/voice_assistant/flows/visualization.py`
   - `NodeStatus` 列舉：PENDING / RUNNING / COMPLETED / FAILED
   - `FlowVisualization` Pydantic 模型：mermaid_code + node_statuses dict
 
 ### Mermaid 渲染增強
 
-- [ ] T027 [US4] 實作帶節點狀態的 Mermaid 輸出 in `src/voice_assistant/flows/visualization.py`
+- [x] T027 [US4] 實作帶節點狀態的 Mermaid 輸出 in `src/voice_assistant/flows/visualization.py`
   - 新增 `render_mermaid_with_status(mermaid_code, node_statuses)` 函式
   - 為不同狀態的節點注入 CSS class（`:::running`、`:::completed` 等）
-- [ ] T028 [P] [US4] 撰寫視覺化單元測試 in `tests/unit/flows/test_visualization.py`
+- [x] T028 [P] [US4] 撰寫視覺化單元測試 in `tests/unit/flows/test_visualization.py`
   - 測試 `render_mermaid_with_status()` 正確注入 CSS class
   - 測試空 node_statuses 時回傳原始 Mermaid
 
 ### Gradio UI 整合
 
-- [ ] T029 [US4] 新增 Mermaid 渲染 HTML 元件 in `src/voice_assistant/voice/ui/blocks.py`
+- [x] T029 [US4] 新增 Mermaid 渲染 HTML 元件 in `src/voice_assistant/voice/ui/blocks.py`
   - 建立 `create_flow_visualization()` 函式回傳 `gr.HTML` 元件
   - 內嵌 mermaid.js CDN script
   - 建立 `update_flow_visualization(mermaid_code)` 更新函式
-- [ ] T030 [US4] 整合流程圖面板到 Gradio UI in `src/voice_assistant/voice/handlers/reply_on_pause.py`
+- [x] T030 [US4] 整合流程圖面板到 Gradio UI in `src/voice_assistant/voice/handlers/reply_on_pause.py`
   - 在右側面板新增流程視覺化區塊
   - 頁面載入時顯示當前流程的靜態 Mermaid 圖
-- [ ] T031 [US4] VoicePipeline 執行時傳送流程圖更新 in `src/voice_assistant/voice/pipeline.py`
+- [x] T031 [US4] VoicePipeline 執行時傳送流程圖更新 in `src/voice_assistant/voice/pipeline.py`
   - `AdditionalOutputs` 增加流程圖 HTML 輸出
   - 執行前：取得 executor 的 `get_visualization()` 並顯示
   - 執行後：更新節點狀態為完成
-- [ ] T032 [US4] 撰寫 UI 視覺化整合測試 in `tests/unit/voice/test_flow_visualization_ui.py`
+- [x] T032 [US4] 撰寫 UI 視覺化整合測試 in `tests/unit/ui/test_flow_visualization_ui.py`
   - 測試 `create_flow_visualization()` 回傳 gr.HTML
   - 測試 `update_flow_visualization()` 產生正確 HTML
 
 ### 驗證
 
-- [ ] T033 [US4] 執行全量測試 `uv run pytest`
-- [ ] T034 [US4] 執行 `uv run ruff check . && uv run ruff format .`
+- [x] T033 [US4] 執行全量測試 `uv run pytest`
+- [x] T034 [US4] 執行 `uv run ruff check . && uv run ruff format .`
 
 **Checkpoint**: User Story 4 完成 — Gradio UI 即時流程視覺化 ✅
 
@@ -206,9 +206,9 @@
 
 **Purpose**: 程式碼品質、文件收尾
 
-- [ ] T035 [P] 最終 Ruff lint + format 檢查 `uv run ruff check --fix . && uv run ruff format .`
-- [ ] T036 最終全量測試 `uv run pytest` 確認所有測試通過
-- [ ] T037 [P] 驗證 VoicePipeline 中已無 FlowMode 相關 if/elif 分支（程式碼審查）
+- [x] T035 [P] 最終 Ruff lint + format 檢查 `uv run ruff check --fix . && uv run ruff format .`
+- [x] T036 最終全量測試 `uv run pytest` 確認所有測試通過
+- [x] T037 [P] 驗證 VoicePipeline 中已無 FlowMode 相關 if/elif 分支（程式碼審查）
 
 ---
 

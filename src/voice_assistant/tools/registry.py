@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import importlib
+import inspect
+import logging
+import pkgutil
 from typing import Any
 
 from voice_assistant.tools.base import BaseTool
 from voice_assistant.tools.schemas import ToolResult
+
+logger = logging.getLogger(__name__)
 
 
 class ToolRegistry:
@@ -78,3 +84,52 @@ class ToolRegistry:
             return await tool.execute(**arguments)
         except Exception as e:
             return ToolResult.fail(str(e))
+
+    def auto_discover(self, package_name: str = "voice_assistant.tools") -> list[str]:
+        """自動掃描指定套件下的 BaseTool 子類別並註冊。
+
+        使用 importlib + inspect 掃描模組，找出所有 BaseTool 的具體子類別，
+        自動實例化並註冊。已註冊的工具會跳過。
+
+        Args:
+            package_name: 要掃描的套件名稱。
+
+        Returns:
+            已註冊的工具名稱列表。
+        """
+        registered: list[str] = []
+
+        try:
+            package = importlib.import_module(package_name)
+        except ImportError:
+            logger.warning("無法匯入套件: %s", package_name)
+            return registered
+
+        package_path = getattr(package, "__path__", None)
+        if package_path is None:
+            return registered
+
+        for _importer, module_name, _is_pkg in pkgutil.iter_modules(package_path):
+            full_module_name = f"{package_name}.{module_name}"
+            try:
+                module = importlib.import_module(full_module_name)
+            except Exception as e:
+                logger.warning("匯入模組 %s 失敗: %s", full_module_name, e)
+                continue
+
+            for _name, obj in inspect.getmembers(module, inspect.isclass):
+                if (
+                    issubclass(obj, BaseTool)
+                    and obj is not BaseTool
+                    and not inspect.isabstract(obj)
+                ):
+                    try:
+                        instance = obj()
+                        if instance.name not in self._tools:
+                            self.register(instance)
+                            registered.append(instance.name)
+                            logger.info("自動發現工具: %s", instance.name)
+                    except Exception as e:
+                        logger.warning("實例化工具 %s 失敗: %s", obj.__name__, e)
+
+        return registered
