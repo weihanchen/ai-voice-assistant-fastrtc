@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from voice_assistant.flows.base import BaseFlowExecutor
+from voice_assistant.flows.base import BaseFlowExecutor, NodeChangeCallback
 
 
 class TestBaseFlowExecutorABC:
@@ -19,7 +19,11 @@ class TestBaseFlowExecutorABC:
         """子類別必須實作 flow_name property。"""
 
         class IncompleteExecutor(BaseFlowExecutor):
-            async def execute(self, user_input: str) -> str:
+            async def execute(
+                self,
+                user_input: str,
+                on_node_change: NodeChangeCallback | None = None,
+            ) -> str:
                 return ""
 
         with pytest.raises(TypeError, match="abstract"):
@@ -44,7 +48,11 @@ class TestBaseFlowExecutorABC:
             def flow_name(self) -> str:
                 return "test"
 
-            async def execute(self, user_input: str) -> str:
+            async def execute(
+                self,
+                user_input: str,
+                on_node_change: NodeChangeCallback | None = None,
+            ) -> str:
                 return "response"
 
         executor = ConcreteExecutor()
@@ -58,7 +66,11 @@ class TestBaseFlowExecutorABC:
             def flow_name(self) -> str:
                 return "concrete"
 
-            async def execute(self, user_input: str) -> str:
+            async def execute(
+                self,
+                user_input: str,
+                on_node_change: NodeChangeCallback | None = None,
+            ) -> str:
                 return f"echo: {user_input}"
 
         executor = ConcreteExecutor()
@@ -72,7 +84,11 @@ class TestBaseFlowExecutorABC:
             def flow_name(self) -> str:
                 return "visual"
 
-            async def execute(self, user_input: str) -> str:
+            async def execute(
+                self,
+                user_input: str,
+                on_node_change: NodeChangeCallback | None = None,
+            ) -> str:
                 return ""
 
             def get_visualization(self) -> str | None:
@@ -90,7 +106,11 @@ class TestBaseFlowExecutorABC:
             def flow_name(self) -> str:
                 return "echo"
 
-            async def execute(self, user_input: str) -> str:
+            async def execute(
+                self,
+                user_input: str,
+                on_node_change: NodeChangeCallback | None = None,
+            ) -> str:
                 return f"echo: {user_input}"
 
         executor = EchoExecutor()

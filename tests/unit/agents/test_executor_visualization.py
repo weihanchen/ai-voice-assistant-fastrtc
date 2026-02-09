@@ -41,13 +41,23 @@ class TestMultiAgentExecutorVisualization:
         assert has_keyword, f"Mermaid 輸出不包含預期關鍵字: {result[:200]}"
 
     def test_get_visualization_contains_node_names(self) -> None:
-        """get_visualization() 應包含流程圖的節點名稱。"""
+        """get_visualization() 應包含流程圖的節點 ID。"""
         executor = self._make_executor()
         result = executor.get_visualization()
-        # 流程圖應包含已定義的節點
+        # 流程圖應包含已定義的節點 ID
         expected_nodes = ["supervisor_decompose", "execute_agent", "aggregate"]
         for node in expected_nodes:
             assert node in result, f"Mermaid 輸出缺少節點 '{node}': {result[:200]}"
+
+    def test_get_visualization_contains_chinese_labels(self) -> None:
+        """get_visualization() 應包含使用者友善的中文標籤。"""
+        executor = self._make_executor()
+        result = executor.get_visualization()
+        expected_labels = ["任務分解", "代理執行", "結果彙整", "開始", "結束"]
+        for label in expected_labels:
+            assert label in result, (
+                f"Mermaid 輸出缺少中文標籤 '{label}': {result[:300]}"
+            )
 
     def test_flow_name_is_multi_agent(self) -> None:
         """flow_name 應為 'multi_agent'。"""

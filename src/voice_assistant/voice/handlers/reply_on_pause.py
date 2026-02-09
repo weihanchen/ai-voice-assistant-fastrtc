@@ -223,8 +223,10 @@ def create_voice_stream(settings: Settings) -> Stream:
         current_chatbot: list[dict[str, str]],
         current_status: str,
         current_flow_viz: str,
-    ) -> tuple[list[dict[str, str]], str, None, str]:
-        """處理上傳的音訊檔案
+    ):
+        """處理上傳的音訊檔案（generator 模式，即時串流更新 UI）。
+
+        使用 yield 逐步回傳流程圖更新，讓 Gradio 即時反映節點執行狀態。
 
         Args:
             audio: (sample_rate, audio_array) 或 None
@@ -232,21 +234,23 @@ def create_voice_stream(settings: Settings) -> Stream:
             current_status: 目前的狀態文字
             current_flow_viz: 目前的流程視覺化 HTML
 
-        Returns:
-            (updated_chatbot, updated_status, cleared_audio_input, updated_flow_viz)
+        Yields:
+            (updated_chatbot, updated_status, audio_input_value, updated_flow_viz)
         """
         if audio is None:
-            return current_chatbot, current_status, None, current_flow_viz
+            yield current_chatbot, current_status, None, current_flow_viz
+            return
 
         # 轉換音訊格式
         processed_audio = audio_input_handler(audio)
         if processed_audio is None:
-            return current_chatbot, current_status, None, current_flow_viz
+            yield current_chatbot, current_status, None, current_flow_viz
+            return
 
         logger.info("[Handler] 開始處理上傳的音訊檔案")
 
-        # 使用 pipeline 處理音訊（同步方式）
-        # 收集所有輸出
+        # 使用 pipeline 處理音訊（generator 模式）
+        # 每次收到 AdditionalOutputs 即 yield 更新給 UI
         final_chatbot = current_chatbot
         final_status = current_status
         final_flow_viz = current_flow_viz
@@ -261,13 +265,16 @@ def create_voice_stream(settings: Settings) -> Stream:
                     final_chatbot = output.args[0]
                     final_status = output.args[1]
                     final_flow_viz = output.args[2]
+                    # 即時串流更新給 Gradio UI
+                    yield final_chatbot, final_status, None, final_flow_viz
                 # 音訊輸出在這裡忽略（不播放 TTS）
         except Exception as e:
             logger.error(f"[Handler] 處理上傳音訊失敗: {e}", exc_info=True)
             final_status = f"❌ 處理失敗: {e}"
 
         logger.info("[Handler] 上傳音訊處理完成")
-        return final_chatbot, final_status, None, final_flow_viz
+        # 最終結果（確保最後一次更新到達 UI）
+        yield final_chatbot, final_status, None, final_flow_viz
 
     # 建立自訂 UI，添加音訊上傳功能
     sidebar_css = """

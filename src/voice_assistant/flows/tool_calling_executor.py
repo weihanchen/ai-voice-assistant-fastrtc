@@ -10,7 +10,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from voice_assistant.flows.base import BaseFlowExecutor
+from voice_assistant.flows.base import BaseFlowExecutor, NodeChangeCallback
+from voice_assistant.flows.visualization import NodeStatus
 from voice_assistant.llm.schemas import ChatMessage
 from voice_assistant.tools.registry import ToolRegistry
 
@@ -49,11 +50,28 @@ class ToolCallingExecutor(BaseFlowExecutor):
         """流程名稱。"""
         return "tools"
 
-    async def execute(self, user_input: str) -> str:
+    # Tool Calling 流程的 Mermaid 視覺化圖表
+    _MERMAID_DIAGRAM = (
+        "graph TD\n"
+        "    llm_call[LLM 呼叫]\n"
+        "    tool_execute[工具執行]\n"
+        "    response_generate[回應產生]\n"
+        "    llm_call --> tool_execute\n"
+        "    tool_execute --> response_generate\n"
+    )
+
+    async def execute(
+        self,
+        user_input: str,
+        on_node_change: NodeChangeCallback | None = None,
+    ) -> str:
         """使用 Tool Calling 處理使用者輸入。
+
+        透過 on_node_change callback 即時回報節點執行狀態。
 
         Args:
             user_input: 使用者輸入文字。
+            on_node_change: 節點狀態變更回呼。
 
         Returns:
             LLM 回應文字。
@@ -67,14 +85,28 @@ class ToolCallingExecutor(BaseFlowExecutor):
         system_prompt = self._system_prompt_provider()
 
         # 第一次 LLM 呼叫
+        if on_node_change:
+            on_node_change("llm_call", NodeStatus.RUNNING)
+
         llm_response = await self._llm_client.chat(
             messages, tools=tools, system_prompt=system_prompt
         )
 
+        if on_node_change:
+            on_node_change("llm_call", NodeStatus.COMPLETED)
+
         # 處理 Tool Calls（如果有）
         return await self._process_tool_calls(
-            messages, llm_response, tools, system_prompt
+            messages, llm_response, tools, system_prompt, on_node_change
         )
+
+    def get_visualization(self) -> str:
+        """取得 Tool Calling 流程的 Mermaid 視覺化圖表。
+
+        Returns:
+            Mermaid 格式字串
+        """
+        return self._MERMAID_DIAGRAM
 
     async def _process_tool_calls(
         self,
@@ -82,6 +114,7 @@ class ToolCallingExecutor(BaseFlowExecutor):
         llm_response: ChatMessage,
         tools: list[dict],
         system_prompt: str,
+        on_node_change: NodeChangeCallback | None = None,
     ) -> str:
         """處理 LLM 的 Tool Calls 回應。
 
@@ -90,11 +123,16 @@ class ToolCallingExecutor(BaseFlowExecutor):
             llm_response: LLM 回應（可能包含 tool_calls）。
             tools: 工具定義列表。
             system_prompt: 系統提示詞。
+            on_node_change: 節點狀態變更回呼。
 
         Returns:
             最終的文字回應。
         """
         if not llm_response.tool_calls:
+            # 沒有 tool_calls，直接標記完成
+            if on_node_change:
+                on_node_change("tool_execute", NodeStatus.COMPLETED)
+                on_node_change("response_generate", NodeStatus.COMPLETED)
             return llm_response.content or ""
 
         logger.info(
@@ -103,6 +141,10 @@ class ToolCallingExecutor(BaseFlowExecutor):
         )
 
         messages.append(llm_response)
+
+        # 工具執行階段
+        if on_node_change:
+            on_node_change("tool_execute", NodeStatus.RUNNING)
 
         for tool_call in llm_response.tool_calls:
             tool_name = tool_call.function["name"]
@@ -129,9 +171,18 @@ class ToolCallingExecutor(BaseFlowExecutor):
             )
             messages.append(tool_message)
 
+        if on_node_change:
+            on_node_change("tool_execute", NodeStatus.COMPLETED)
+
         # 再次呼叫 LLM 產生最終回應
+        if on_node_change:
+            on_node_change("response_generate", NodeStatus.RUNNING)
+
         final_response = await self._llm_client.chat(
             messages, tools=tools, system_prompt=system_prompt
         )
+
+        if on_node_change:
+            on_node_change("response_generate", NodeStatus.COMPLETED)
 
         return final_response.content or ""

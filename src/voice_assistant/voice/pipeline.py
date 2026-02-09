@@ -5,6 +5,8 @@
 
 import asyncio
 import logging
+import queue
+import threading
 from collections.abc import Iterator
 from typing import TYPE_CHECKING
 
@@ -13,6 +15,7 @@ from fastrtc import AdditionalOutputs
 from numpy.typing import NDArray
 
 from voice_assistant.config import FlowMode, get_settings
+from voice_assistant.flows.base import NodeChangeCallback
 from voice_assistant.flows.registry import FlowRegistry
 from voice_assistant.flows.visualization import NodeStatus, render_mermaid_with_status
 from voice_assistant.tools.registry import ToolRegistry
@@ -178,6 +181,7 @@ class VoicePipeline:
 
     def _get_flow_viz_html(
         self,
+        flow_name: str | None = None,
         node_statuses: dict[str, NodeStatus] | None = None,
     ) -> str:
         """取得目前流程執行器的視覺化 HTML。
@@ -185,15 +189,16 @@ class VoicePipeline:
         根據流程模式取得對應的 Mermaid 圖表，並注入節點狀態後轉換為 HTML。
 
         Args:
+            flow_name: 流程名稱，為 None 時使用全域 flow_mode
             node_statuses: 節點狀態映射，為 None 時不注入狀態
 
         Returns:
             流程視覺化 HTML 字串
         """
         try:
-            flow_name = self.flow_mode.value
-            if self.flow_registry.has(flow_name):
-                executor = self.flow_registry.get(flow_name)
+            effective_name = flow_name or self.flow_mode.value
+            if self.flow_registry.has(effective_name):
+                executor = self.flow_registry.get(effective_name)
                 mermaid_code = executor.get_visualization()
                 if mermaid_code and node_statuses:
                     mermaid_code = render_mermaid_with_status(
@@ -204,7 +209,28 @@ class VoicePipeline:
             logger.warning(f"[Pipeline] 流程視覺化取得失敗: {e}")
         return update_flow_visualization(None)
 
-    async def _process_with_executor(self, user_text: str) -> str:
+    def _get_effective_flow_name(self) -> str:
+        """取得有效的流程名稱（角色專屬 > 全域設定）。
+
+        Returns:
+            有效的流程名稱字串
+        """
+        effective_flow_mode = self.flow_mode
+        if self.role_registry and self.state.current_role_id:
+            current_role = self.role_registry.get(self.state.current_role_id)
+            if (
+                current_role
+                and hasattr(current_role, "preferred_flow_mode")
+                and current_role.preferred_flow_mode
+            ):
+                effective_flow_mode = FlowMode(current_role.preferred_flow_mode)
+        return effective_flow_mode.value
+
+    async def _process_with_executor(
+        self,
+        user_text: str,
+        on_node_change: NodeChangeCallback | None = None,
+    ) -> str:
         """使用 FlowRegistry 中的執行器處理使用者輸入。
 
         根據有效的流程模式（角色專屬 > 全域設定），
@@ -212,6 +238,7 @@ class VoicePipeline:
 
         Args:
             user_text: 使用者輸入文字
+            on_node_change: 節點狀態變更回呼
 
         Returns:
             回應文字
@@ -247,7 +274,7 @@ class VoicePipeline:
             flow_name = self.flow_mode.value
         executor = self.flow_registry.get(flow_name)
         logger.info("[Pipeline] 使用流程執行器: %s", executor.flow_name)
-        return await executor.execute(user_text)
+        return await executor.execute(user_text, on_node_change=on_node_change)
 
     def process_audio_with_outputs(
         self,
@@ -403,8 +430,66 @@ class VoicePipeline:
             )
 
             # 2. 根據 flow_mode 處理輸入（透過 FlowRegistry 統一調度）
+            # 使用 queue + callback 實現即時流程視覺化更新
             logger.debug(f"[Pipeline] 處理輸入: '{_truncate_for_log(user_text)}'")
-            response = _run_async_safely(self._process_with_executor(user_text))
+
+            effective_flow_name = self._get_effective_flow_name()
+            node_statuses: dict[str, NodeStatus] = {}
+            status_queue: queue.Queue[tuple[str, NodeStatus]] = queue.Queue()
+            _SENTINEL = object()  # 標記執行完成
+
+            def _on_node_change(node_name: str, status: NodeStatus) -> None:
+                """節點狀態變更回呼，推送到 queue 供 generator 消費。"""
+                node_statuses[node_name] = status
+                status_queue.put((node_name, status))
+
+            # 在背景執行緒中執行 executor
+            response_holder: list[str] = []
+            error_holder: list[Exception] = []
+
+            def _run_executor() -> None:
+                try:
+                    result = _run_async_safely(
+                        self._process_with_executor(
+                            user_text, on_node_change=_on_node_change
+                        )
+                    )
+                    response_holder.append(result)
+                except Exception as e:
+                    error_holder.append(e)
+                finally:
+                    status_queue.put(_SENTINEL)  # type: ignore[arg-type]
+
+            executor_thread = threading.Thread(target=_run_executor, daemon=True)
+            executor_thread.start()
+
+            # 從 queue 消費節點狀態更新，即時 yield 更新的 flow_viz_html
+            while True:
+                try:
+                    item = status_queue.get(timeout=30.0)
+                except queue.Empty:
+                    logger.warning("[Pipeline] 流程執行逾時（30s），跳過即時視覺化")
+                    break
+                if item is _SENTINEL:
+                    break
+                # 每次節點狀態變更時，重新渲染 flow_viz_html
+                flow_viz_html = self._get_flow_viz_html(
+                    flow_name=effective_flow_name,
+                    node_statuses=node_statuses,
+                )
+                yield AdditionalOutputs(
+                    self.state.get_gradio_messages(),
+                    self.state.get_ui_state().status_text,
+                    flow_viz_html,
+                )
+
+            executor_thread.join()
+
+            # 檢查是否有錯誤
+            if error_holder:
+                raise error_holder[0]
+
+            response = response_holder[0]
 
             logger.debug(f"[Pipeline] 回應: '{_truncate_for_log(response)}'")
 

@@ -6,6 +6,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from collections.abc import Callable
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from voice_assistant.flows.visualization import NodeStatus
+
+# 節點狀態變更回呼型別：(node_name, status) -> None
+NodeChangeCallback = Callable[[str, "NodeStatus"], None]
 
 
 class BaseFlowExecutor(ABC):
@@ -21,11 +29,16 @@ class BaseFlowExecutor(ABC):
         """流程名稱，用於 FlowRegistry 識別。"""
 
     @abstractmethod
-    async def execute(self, user_input: str) -> str:
+    async def execute(
+        self,
+        user_input: str,
+        on_node_change: NodeChangeCallback | None = None,
+    ) -> str:
         """執行流程並回傳回應文字。
 
         Args:
             user_input: 使用者輸入的文字。
+            on_node_change: 節點狀態變更回呼，執行器在節點開始/完成時呼叫。
 
         Returns:
             LLM 產生的回應文字。

@@ -64,6 +64,56 @@ def save_mermaid_png(graph: CompiledStateGraph, output_path: str) -> None:
         f.write(png_data)
 
 
+def apply_node_labels(
+    mermaid_code: str,
+    label_map: dict[str, str],
+) -> str:
+    """將 Mermaid 流程圖中的節點 ID 替換為使用者友善的顯示標籤。
+
+    保留原始節點 ID 作為 Mermaid 節點識別碼，僅加入中括號標籤。
+    例如：``__start__`` → ``__start__[開始]``，
+    ``classifier`` → ``classifier[意圖分類]``。
+
+    對於已經有標籤的節點（如 ``node[Label]``），會替換既有標籤。
+    對於 LangGraph 自動產生的特殊格式（如 ``__start__([<p>__start__</p>])``），
+    會替換為簡潔的標籤格式。
+
+    Args:
+        mermaid_code: 原始 Mermaid 原始碼
+        label_map: 節點 ID 到顯示標籤的映射
+
+    Returns:
+        替換標籤後的 Mermaid 原始碼
+    """
+    result = mermaid_code
+    for node_id, label in label_map.items():
+        # 匹配 LangGraph 常見的節點定義格式：
+        # 1. node_id([<p>node_id</p>]) — LangGraph __start__/__end__ 格式
+        # 2. node_id[Label] 或 node_id["Label"] — 一般節點
+        # 3. node_id(Label) — 圓角節點
+        # 4. 單獨的 node_id（無括號）— 邊定義中的節點引用不處理
+
+        # 先處理 LangGraph 特殊格式：node_id([<p>...</p>])
+        stadium_pattern = re.compile(
+            rf'{re.escape(node_id)}\(\[["<].*?[">]\]\)',
+        )
+        result = stadium_pattern.sub(f"{node_id}([{label}])", result)
+
+        # 再處理一般方括號格式：node_id[...] 或 node_id["..."]
+        bracket_pattern = re.compile(
+            rf'{re.escape(node_id)}\[[\["]?[^\]]*[\]"]?\]',
+        )
+        result = bracket_pattern.sub(f"{node_id}[{label}]", result)
+
+        # 處理圓括號格式：node_id(...)（但排除已處理的 ([ ]) 格式）
+        paren_pattern = re.compile(
+            rf"{re.escape(node_id)}\((?!\[)[^\)]*\)",
+        )
+        result = paren_pattern.sub(f"{node_id}([{label}])", result)
+
+    return result
+
+
 def render_mermaid_with_status(
     mermaid_code: str,
     node_statuses: dict[str, NodeStatus] | None = None,

@@ -202,6 +202,59 @@
 
 ---
 
+## Phase 5b: User Story 4 補完 - 即時節點狀態追蹤 (Priority: P3)
+
+**Goal**: 補完 US4 的即時視覺化功能（FR-011），流程執行時節點依序高亮（running → completed）
+
+**背景**: Phase 5 僅實作靜態快照（flow_viz_html 只在開頭計算一次），未達到 spec 要求的即時節點狀態追蹤
+
+### 執行器 Callback 機制
+
+- [x] T038 [US4] BaseFlowExecutor.execute() 新增 `on_node_change` callback 參數 in `src/voice_assistant/flows/base.py`
+  - 定義 `NodeChangeCallback = Callable[[str, NodeStatus], None]` 型別別名
+  - execute() 新增 `on_node_change: NodeChangeCallback | None = None` 參數
+- [x] T039 [US4] FlowExecutor: ainvoke → astream + callback in `src/voice_assistant/flows/__init__.py`
+  - 使用 `astream(stream_mode="updates")` 取代 `ainvoke()`
+  - 每個 chunk 呼叫 `on_node_change(node_name, RUNNING/COMPLETED)`
+- [x] T040 [US4] MultiAgentExecutor: ainvoke → astream + callback in `src/voice_assistant/agents/executor.py`
+  - 同 T039 模式
+- [x] T041 [US4] ToolCallingExecutor: 手動 Mermaid 圖 + callback in `src/voice_assistant/flows/tool_calling_executor.py`
+  - 覆寫 `get_visualization()` 回傳手工 Mermaid 圖（llm_call → tool_execute → response_generate）
+  - execute() 各步驟呼叫 on_node_change
+
+### Pipeline 即時視覺化
+
+- [x] T042 [US4] Pipeline._get_flow_viz_html() 支援 flow_name + node_statuses in `src/voice_assistant/voice/pipeline.py`
+  - 新增 `flow_name` 參數避免使用全域 flow_mode（role-aware bug fix）
+  - 新增 `node_statuses` 參數注入狀態
+- [x] T043 [US4] Pipeline._get_effective_flow_name() 抽取有效流程名稱 in `src/voice_assistant/voice/pipeline.py`
+  - 角色專屬 > 全域設定 邏輯共用化
+- [x] T044 [US4] Pipeline: 重構 process_audio_with_outputs 使用 queue + thread in `src/voice_assistant/voice/pipeline.py`
+  - 使用 `threading.Thread` + `queue.Queue` 在背景執行 executor
+  - executor callback 推送到 queue，generator 消費後即時 yield flow_viz_html
+  - 每次 node_change 事件重新渲染 Mermaid + 注入 CSS class
+
+### 測試更新
+
+- [x] T045 [P] [US4] 更新 BaseFlowExecutor 測試 in `tests/unit/flows/test_base_flow_executor.py`
+  - 子類別 execute() 簽名包含 on_node_change 參數
+- [x] T046 [P] [US4] 更新 ToolCallingExecutor 測試 in `tests/unit/flows/test_tool_calling_executor.py`
+  - 測試 get_visualization() 回傳 Mermaid 格式
+  - 測試 callback 在有/無 tool_calls 時的完整呼叫序列
+- [x] T047 [P] [US4] 新增 Pipeline 即時視覺化測試 in `tests/unit/test_voice_pipeline.py`
+  - 測試 _get_effective_flow_name()
+  - 測試 _get_flow_viz_html() 接受 flow_name + node_statuses
+  - 測試 process_audio_with_outputs 執行期間有多次 UI 更新
+
+### 驗證
+
+- [x] T048 [US4] 執行全量測試 `uv run pytest`
+- [x] T049 [US4] 執行 `uv run ruff check --fix . && uv run ruff format .`
+
+**Checkpoint**: User Story 4 即時視覺化補完 ✅
+
+---
+
 ## Phase 6: Polish & Cross-Cutting Concerns
 
 **Purpose**: 程式碼品質、文件收尾

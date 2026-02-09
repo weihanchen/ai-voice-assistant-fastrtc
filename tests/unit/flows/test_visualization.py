@@ -5,6 +5,7 @@ from __future__ import annotations
 from voice_assistant.flows.visualization import (
     FlowVisualization,
     NodeStatus,
+    apply_node_labels,
     render_mermaid_with_status,
 )
 
@@ -128,3 +129,76 @@ class TestRenderMermaidWithStatus:
         statuses = {"Z": NodeStatus.RUNNING}
         result = render_mermaid_with_status(mermaid, statuses)
         assert result == mermaid
+
+
+class TestApplyNodeLabels:
+    """測試 apply_node_labels() 函式。"""
+
+    def test_replaces_bracket_label(self) -> None:
+        """替換方括號標籤。"""
+        mermaid = "graph TD\n    classifier[classifier]\n    classifier --> end_node"
+        result = apply_node_labels(mermaid, {"classifier": "意圖分類"})
+        assert "classifier[意圖分類]" in result
+
+    def test_replaces_langgraph_start_end(self) -> None:
+        """替換 LangGraph __start__/__end__ 格式。"""
+        mermaid = (
+            "graph TD\n"
+            "\t__start__([<p>__start__</p>])\n"
+            "\t__end__([<p>__end__</p>])\n"
+            "\t__start__ --> node1\n"
+            "\tnode1 --> __end__"
+        )
+        result = apply_node_labels(
+            mermaid,
+            {
+                "__start__": "開始",
+                "__end__": "結束",
+            },
+        )
+        assert "__start__([開始])" in result
+        assert "__end__([結束])" in result
+
+    def test_replaces_round_bracket_label(self) -> None:
+        """替換圓括號標籤。"""
+        mermaid = "graph TD\n    my_node(some label)"
+        result = apply_node_labels(mermaid, {"my_node": "我的節點"})
+        assert "my_node([我的節點])" in result
+
+    def test_empty_label_map_returns_original(self) -> None:
+        """空映射表時回傳原始碼。"""
+        mermaid = "graph TD\nA[Start]-->B[End]"
+        result = apply_node_labels(mermaid, {})
+        assert result == mermaid
+
+    def test_preserves_unmatched_nodes(self) -> None:
+        """未匹配的節點保持不變。"""
+        mermaid = "graph TD\nA[Start]-->B[End]"
+        result = apply_node_labels(mermaid, {"A": "開始"})
+        assert "A[開始]" in result
+        assert "B[End]" in result
+
+    def test_multiple_labels(self) -> None:
+        """同時替換多個標籤。"""
+        mermaid = (
+            "graph TD\n"
+            "    supervisor_decompose[supervisor_decompose]\n"
+            "    execute_agent[execute_agent]\n"
+            "    aggregate[aggregate]\n"
+        )
+        labels = {
+            "supervisor_decompose": "任務分解",
+            "execute_agent": "代理執行",
+            "aggregate": "結果彙整",
+        }
+        result = apply_node_labels(mermaid, labels)
+        assert "supervisor_decompose[任務分解]" in result
+        assert "execute_agent[代理執行]" in result
+        assert "aggregate[結果彙整]" in result
+
+    def test_works_with_render_mermaid_with_status(self) -> None:
+        """apply_node_labels 產出可被 render_mermaid_with_status 正確處理。"""
+        mermaid = "graph TD\n    node1[原始標籤]\n    node1 --> node2[End]"
+        labeled = apply_node_labels(mermaid, {"node1": "中文節點"})
+        result = render_mermaid_with_status(labeled, {"node1": NodeStatus.RUNNING})
+        assert "node1[中文節點]:::running" in result
