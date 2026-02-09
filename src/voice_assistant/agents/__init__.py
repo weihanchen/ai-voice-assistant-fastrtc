@@ -22,7 +22,7 @@ from voice_assistant.agents.base import BaseAgent
 from voice_assistant.agents.executor import MultiAgentExecutor
 from voice_assistant.agents.finance import FinanceAgent
 from voice_assistant.agents.general import GeneralAgent
-from voice_assistant.agents.graph import create_multi_agent_graph
+from voice_assistant.agents.graph import create_multi_agent_graph, discover_agents
 from voice_assistant.agents.state import (
     AgentResult,
     AgentTask,
@@ -51,5 +51,6 @@ __all__ = [
     "GeneralAgent",
     # Graph & Executor
     "create_multi_agent_graph",
+    "discover_agents",
     "MultiAgentExecutor",
 ]

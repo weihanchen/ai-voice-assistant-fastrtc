@@ -6,6 +6,10 @@
 from __future__ import annotations
 
 import asyncio
+import importlib
+import inspect
+import logging
+import pkgutil
 from typing import Any
 
 from langgraph.graph import END, START, StateGraph
@@ -13,8 +17,6 @@ from langgraph.graph.state import CompiledStateGraph
 from langgraph.types import Send
 
 from voice_assistant.agents.base import BaseAgent
-from voice_assistant.agents.finance import FinanceAgent
-from voice_assistant.agents.general import GeneralAgent
 from voice_assistant.agents.state import (
     AgentResult,
     AgentTask,
@@ -22,21 +24,87 @@ from voice_assistant.agents.state import (
     MultiAgentState,
 )
 from voice_assistant.agents.supervisor import SupervisorAgent
-from voice_assistant.agents.travel import TravelAgent
-from voice_assistant.agents.weather import WeatherAgent
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.tools.registry import ToolRegistry
+
+logger = logging.getLogger(__name__)
+
+
+def discover_agents(
+    llm_client: LLMClient,
+    tool_registry: ToolRegistry,
+    package_name: str = "voice_assistant.agents",
+) -> dict[AgentType, BaseAgent]:
+    """自動掃描指定套件下的 BaseAgent 子類別並實例化。
+
+    根據各 Agent 建構式的參數簽章，自動注入 llm_client 和/或 tool_registry。
+    過濾掉 BaseAgent 本身和 SupervisorAgent（由 graph 內部管理）。
+
+    Args:
+        llm_client: LLM 客戶端，用於需要 LLM 的 Agent
+        tool_registry: 工具註冊表，用於需要工具的 Agent
+        package_name: 要掃描的套件名稱
+
+    Returns:
+        dict[AgentType, BaseAgent]: Agent 類型到實例的映射
+    """
+    agents: dict[AgentType, BaseAgent] = {}
+
+    try:
+        package = importlib.import_module(package_name)
+    except ImportError:
+        logger.warning("無法匯入套件: %s", package_name)
+        return agents
+
+    package_path = getattr(package, "__path__", None)
+    if package_path is None:
+        return agents
+
+    for _importer, module_name, _is_pkg in pkgutil.iter_modules(package_path):
+        full_module_name = f"{package_name}.{module_name}"
+        try:
+            module = importlib.import_module(full_module_name)
+        except Exception as e:
+            logger.warning("匯入模組 %s 失敗: %s", full_module_name, e)
+            continue
+
+        for _name, obj in inspect.getmembers(module, inspect.isclass):
+            if (
+                issubclass(obj, BaseAgent)
+                and obj is not BaseAgent
+                and not inspect.isabstract(obj)
+                and obj.__name__ != "SupervisorAgent"
+            ):
+                try:
+                    # 檢查建構式參數以決定注入方式
+                    sig = inspect.signature(obj.__init__)
+                    params = list(sig.parameters.keys())
+                    kwargs: dict[str, Any] = {}
+                    if "tool_registry" in params:
+                        kwargs["tool_registry"] = tool_registry
+                    if "llm_client" in params:
+                        kwargs["llm_client"] = llm_client
+
+                    instance = obj(**kwargs)
+                    agents[instance.agent_type] = instance
+                    logger.info("自動發現 Agent: %s", instance.agent_type.value)
+                except Exception as e:
+                    logger.warning("實例化 Agent %s 失敗: %s", obj.__name__, e)
+
+    return agents
 
 
 def create_multi_agent_graph(
     llm_client: LLMClient,
     tool_registry: ToolRegistry,
+    agents: dict[AgentType, BaseAgent] | None = None,
 ) -> CompiledStateGraph:
     """建立多代理協作流程圖。
 
     Args:
         llm_client: LLM 客戶端
         tool_registry: Tool 註冊表
+        agents: Agent 映射（可選，預設使用 discover_agents 自動發現）
 
     Returns:
         CompiledStateGraph: 編譯後的 LangGraph 流程圖
@@ -46,12 +114,8 @@ def create_multi_agent_graph(
     """
     # 建立 Supervisor 和 Expert Agents
     supervisor = SupervisorAgent(llm_client)
-    agents: dict[AgentType, BaseAgent] = {
-        AgentType.WEATHER: WeatherAgent(tool_registry),
-        AgentType.FINANCE: FinanceAgent(tool_registry),
-        AgentType.TRAVEL: TravelAgent(tool_registry, llm_client),
-        AgentType.GENERAL: GeneralAgent(llm_client),
-    }
+    if agents is None:
+        agents = discover_agents(llm_client, tool_registry)
 
     # 定義節點函式
     async def supervisor_decompose(state: MultiAgentState) -> dict[str, Any]:

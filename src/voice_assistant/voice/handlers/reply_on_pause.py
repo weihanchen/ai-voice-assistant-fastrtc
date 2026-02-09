@@ -9,17 +9,16 @@ import gradio as gr
 import numpy as np
 from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream, WebRTC
 
+from voice_assistant.agents import MultiAgentExecutor
 from voice_assistant.config import Settings
+from voice_assistant.flows import FlowExecutor, FlowRegistry, ToolCallingExecutor
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.roles.predefined.assistant import AssistantRole
 from voice_assistant.roles.predefined.coach import CoachRole
 from voice_assistant.roles.predefined.interviewer import InterviewerRole
 from voice_assistant.roles.registry import RoleRegistry
 from voice_assistant.tools import (
-    ExchangeRateTool,
-    StockPriceTool,
     ToolRegistry,
-    WeatherTool,
 )
 from voice_assistant.voice.pipeline import VoicePipeline
 from voice_assistant.voice.schemas import VoicePipelineConfig
@@ -27,6 +26,7 @@ from voice_assistant.voice.ui import (
     additional_outputs_handler,
     audio_input_handler,
     create_additional_outputs,
+    create_flow_visualization,
 )
 
 logger = logging.getLogger(__name__)
@@ -77,11 +77,29 @@ def create_voice_stream(settings: Settings) -> Stream:
         server_port=settings.server_port,
     )
 
-    # 初始化工具註冊表（Composition Root）
+    # 初始化工具註冊表（自動掃描 BaseTool 子類別）
     tool_registry = ToolRegistry()
-    tool_registry.register(WeatherTool())
-    tool_registry.register(ExchangeRateTool())
-    tool_registry.register(StockPriceTool())
+    tool_registry.auto_discover()
+
+    # 009: 建立 FlowRegistry 並註冊所有流程執行器
+    # 注意：ToolCallingExecutor 的 system_prompt_provider 使用 late-binding，
+    # 在 pipeline 建立後會自動引用 pipeline._get_current_system_prompt
+    _pipeline_ref: list[VoicePipeline | None] = [None]
+
+    flow_registry = FlowRegistry()
+    flow_registry.register(
+        ToolCallingExecutor(
+            llm_client=llm_client,
+            tool_registry=tool_registry,
+            system_prompt_provider=lambda: (
+                _pipeline_ref[0]._get_current_system_prompt()
+                if _pipeline_ref[0] is not None
+                else VoicePipeline.DEFAULT_SYSTEM_PROMPT
+            ),
+        )
+    )
+    flow_registry.register(FlowExecutor(llm_client, tool_registry))
+    flow_registry.register(MultiAgentExecutor(llm_client, tool_registry))
 
     # ----------
     # 初始化角色註冊表與預設角色
@@ -107,14 +125,17 @@ def create_voice_stream(settings: Settings) -> Stream:
 
     intent_recognizer = IntentRecognizer(llm_client)
 
-    # 初始化語音管線（使用正確的 007 + 008 整合版本）
+    # 初始化語音管線（使用 009 FlowRegistry 統一流程介面）
     pipeline = VoicePipeline(
         config=config,
         llm_client=llm_client,
         tool_registry=tool_registry,
         intent_recognizer=intent_recognizer,
         role_registry=role_registry,
+        flow_registry=flow_registry,
     )
+    # 設定 late-binding 參考，讓 ToolCallingExecutor 使用角色感知的 system_prompt
+    _pipeline_ref[0] = pipeline
     # 啟動階段先設置預設角色
     if default_role_id:
         pipeline.switch_role(role_registry.get(default_role_id))
@@ -141,6 +162,9 @@ def create_voice_stream(settings: Settings) -> Stream:
 
     # 建立額外輸出元件（Chatbot 和狀態）
     chatbot, status_display = create_additional_outputs()
+
+    # 建立流程視覺化元件
+    flow_viz = create_flow_visualization()
 
     # ---- [AI assistant injects welcome on initial load] ----
     initial_history = []
@@ -176,7 +200,7 @@ def create_voice_stream(settings: Settings) -> Stream:
         ),
         modality="audio",
         mode="send-receive",
-        additional_outputs=[chatbot, status_display],
+        additional_outputs=[chatbot, status_display, flow_viz],
         additional_outputs_handler=additional_outputs_handler,
     )
 
@@ -198,31 +222,42 @@ def create_voice_stream(settings: Settings) -> Stream:
         audio: tuple[int, np.ndarray] | None,
         current_chatbot: list[dict[str, str]],
         current_status: str,
-    ) -> tuple[list[dict[str, str]], str, None]:
-        """處理上傳的音訊檔案
+        current_flow_viz: str,
+    ):
+        """處理上傳的音訊檔案（generator 模式，即時串流更新 UI）。
+
+        使用 yield 逐步回傳流程圖更新，讓 Gradio 即時反映節點執行狀態。
 
         Args:
             audio: (sample_rate, audio_array) 或 None
             current_chatbot: 目前的對話記錄
             current_status: 目前的狀態文字
+            current_flow_viz: 目前的流程視覺化 HTML
 
-        Returns:
-            (updated_chatbot, updated_status, cleared_audio_input)
+        Yields:
+            (updated_chatbot, updated_status, audio_input_value, updated_flow_viz)
         """
         if audio is None:
-            return current_chatbot, current_status, None
+            yield current_chatbot, current_status, None, current_flow_viz
+            return
 
         # 轉換音訊格式
         processed_audio = audio_input_handler(audio)
         if processed_audio is None:
-            return current_chatbot, current_status, None
+            yield current_chatbot, current_status, None, current_flow_viz
+            return
 
         logger.info("[Handler] 開始處理上傳的音訊檔案")
 
-        # 使用 pipeline 處理音訊（同步方式）
-        # 收集所有輸出
+        # 先推送一次流程圖，避免第一次上傳時 UI 未更新
+        initial_flow_viz = pipeline._get_flow_viz_html()
+        yield current_chatbot, current_status, None, initial_flow_viz
+
+        # 使用 pipeline 處理音訊（generator 模式）
+        # 每次收到 AdditionalOutputs 即 yield 更新給 UI
         final_chatbot = current_chatbot
         final_status = current_status
+        final_flow_viz = initial_flow_viz
 
         try:
             for output in pipeline.process_audio_with_outputs(processed_audio):
@@ -230,16 +265,20 @@ def create_voice_stream(settings: Settings) -> Stream:
                 from fastrtc import AdditionalOutputs
 
                 if isinstance(output, AdditionalOutputs):
-                    # AdditionalOutputs 物件
+                    # AdditionalOutputs 物件（3 個引數：history, status, flow_viz）
                     final_chatbot = output.args[0]
                     final_status = output.args[1]
+                    final_flow_viz = output.args[2]
+                    # 即時串流更新給 Gradio UI
+                    yield final_chatbot, final_status, None, final_flow_viz
                 # 音訊輸出在這裡忽略（不播放 TTS）
         except Exception as e:
             logger.error(f"[Handler] 處理上傳音訊失敗: {e}", exc_info=True)
             final_status = f"❌ 處理失敗: {e}"
 
         logger.info("[Handler] 上傳音訊處理完成")
-        return final_chatbot, final_status, None
+        # 最終結果（確保最後一次更新到達 UI）
+        yield final_chatbot, final_status, None, final_flow_viz
 
     # 建立自訂 UI，添加音訊上傳功能
     sidebar_css = """
@@ -262,6 +301,9 @@ def create_voice_stream(settings: Settings) -> Stream:
             with gr.Column(scale=2):
                 chatbot.render()
                 clear_btn = gr.Button("🗑️ 清除對話", variant="secondary")
+                # 流程視覺化面板
+                with gr.Accordion("📊 流程圖", open=False):
+                    flow_viz.render()
 
             # 右側：控制區
             with gr.Column(scale=1):
@@ -318,16 +360,16 @@ def create_voice_stream(settings: Settings) -> Stream:
         # 綁定 AdditionalOutputs 事件
         webrtc.on_additional_outputs(
             additional_outputs_handler,
-            inputs=[chatbot, status_display],
-            outputs=[chatbot, status_display],
+            inputs=[chatbot, status_display, flow_viz],
+            outputs=[chatbot, status_display, flow_viz],
             concurrency_limit=stream.concurrency_limit,
         )
 
         # 綁定音訊上傳處理事件
         submit_btn.click(
             fn=process_uploaded_audio,
-            inputs=[audio_input, chatbot, status_display],
-            outputs=[chatbot, status_display, audio_input],
+            inputs=[audio_input, chatbot, status_display, flow_viz],
+            outputs=[chatbot, status_display, audio_input, flow_viz],
         )
 
         # 綁定清除對話事件

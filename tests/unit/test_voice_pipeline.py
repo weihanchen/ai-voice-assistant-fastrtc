@@ -86,8 +86,27 @@ class TestVoicePipeline:
     @pytest.fixture
     def pipeline(self, mock_llm, mock_stt, mock_tts, mock_settings, mocker):
         """建立測試用 Pipeline"""
+        from voice_assistant.flows.registry import FlowRegistry
+        from voice_assistant.flows.tool_calling_executor import ToolCallingExecutor
+        from voice_assistant.tools.registry import ToolRegistry
         from voice_assistant.voice.pipeline import VoicePipeline
         from voice_assistant.voice.schemas import ConversationState, VoicePipelineConfig
+
+        # 建立 FlowRegistry 並註冊 ToolCallingExecutor（使用 mock LLM）
+        flow_registry = FlowRegistry()
+        flow_registry.register(
+            ToolCallingExecutor(
+                llm_client=mock_llm,
+                tool_registry=ToolRegistry(),
+                system_prompt_provider=lambda: "測試用系統提示詞",
+            )
+        )
+
+        # Patch get_settings 回傳 tools 模式（匹配已註冊的 executor）
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
 
         return VoicePipeline(
             state=ConversationState(),
@@ -95,6 +114,7 @@ class TestVoicePipeline:
             llm_client=mock_llm,
             stt=mock_stt,
             tts=mock_tts,
+            flow_registry=flow_registry,
         )
 
     def test_pipeline_initial_state_is_idle(self, pipeline):
@@ -166,11 +186,25 @@ class TestVoicePipeline:
         list(pipeline.process_audio_with_outputs(audio))
         assert mock_llm.chat.call_count >= 1
         last_call = mock_llm.chat.call_args_list[-1]
-        kwargs = last_call[1]
-        assert "messages" in kwargs
-        messages = kwargs["messages"]
+        # ToolCallingExecutor 以位置參數傳遞 messages
+        messages = last_call[0][0] if last_call[0] else last_call[1]["messages"]
         assert len(messages) == 1
         assert messages[0].content == "這是測試輸入"
+
+    def test_additional_outputs_include_flow_viz(self, pipeline):
+        """AdditionalOutputs 包含流程視覺化 HTML（3 個引數）"""
+        audio = (16000, np.zeros(16000, dtype=np.float32))
+        chunks = list(pipeline.process_audio_with_outputs(audio))
+
+        ui_chunks = [c for c in chunks if isinstance(c, AdditionalOutputs)]
+        assert ui_chunks, "應有 AdditionalOutputs"
+
+        for ao in ui_chunks:
+            assert len(ao.args) == 3, "AdditionalOutputs 應有 3 個引數"
+            history, status, flow_viz = ao.args
+            assert isinstance(history, list)
+            assert isinstance(status, str)
+            assert isinstance(flow_viz, str)
 
     def test_process_audio_yields_tts_output(self, pipeline):
         """處理音訊會產生 TTS 輸出"""
@@ -306,3 +340,93 @@ class TestVoicePipelineEmptyInput:
         # 只應有 UI 狀態輸出
         assert all(isinstance(c, AdditionalOutputs) for c in chunks)
         assert pipeline_with_whitespace_input.state.state == VoiceState.IDLE
+
+
+class TestVoicePipelineFlowVisualization:
+    """測試 VoicePipeline 即時流程視覺化（US4）"""
+
+    @pytest.fixture
+    def mock_settings(self, mocker):
+        settings = mocker.MagicMock()
+        settings.flow_mode = FlowMode.TOOLS
+        return settings
+
+    @pytest.fixture
+    def pipeline(self, mocker, mock_settings):
+        """建立帶 ToolCallingExecutor 的 Pipeline。"""
+        from voice_assistant.flows.registry import FlowRegistry
+        from voice_assistant.flows.tool_calling_executor import ToolCallingExecutor
+        from voice_assistant.tools.registry import ToolRegistry
+        from voice_assistant.voice.pipeline import VoicePipeline
+        from voice_assistant.voice.schemas import VoicePipelineConfig
+
+        mock_llm = mocker.MagicMock()
+
+        async def mock_chat(messages, tools=None, system_prompt=None):
+            return ChatMessage(role="assistant", content="測試回應")
+
+        mock_llm.chat = mocker.MagicMock(side_effect=mock_chat)
+
+        mock_stt = mocker.MagicMock()
+        mock_stt.stt.return_value = "你好"
+
+        mock_tts = mocker.MagicMock()
+        mock_tts.stream_tts_sync.return_value = iter(
+            [(24000, np.zeros(1000, dtype=np.float32))]
+        )
+
+        flow_registry = FlowRegistry()
+        flow_registry.register(
+            ToolCallingExecutor(
+                llm_client=mock_llm,
+                tool_registry=ToolRegistry(),
+                system_prompt_provider=lambda: "test",
+            )
+        )
+
+        mocker.patch(
+            "voice_assistant.voice.pipeline.get_settings",
+            return_value=mock_settings,
+        )
+
+        return VoicePipeline(
+            state=ConversationState(),
+            config=VoicePipelineConfig(),
+            llm_client=mock_llm,
+            stt=mock_stt,
+            tts=mock_tts,
+            flow_registry=flow_registry,
+        )
+
+    def test_flow_viz_updates_during_execution(self, pipeline):
+        """執行過程中 flow_viz_html 應有多次更新（含節點狀態變化）。"""
+        audio = (16000, np.zeros(16000, dtype=np.float32))
+        chunks = list(pipeline.process_audio_with_outputs(audio))
+
+        ui_chunks = [c for c in chunks if isinstance(c, AdditionalOutputs)]
+        # 至少有：初始、STT 完成、若干 node_change、回應完成、TTS 完成
+        assert len(ui_chunks) >= 4, f"應有至少 4 次 UI 更新，實際 {len(ui_chunks)}"
+
+        # 所有 UI 更新都應包含 flow_viz_html（第 3 個引數）
+        for ao in ui_chunks:
+            assert len(ao.args) == 3
+            assert isinstance(ao.args[2], str)
+
+    def test_get_effective_flow_name_default(self, pipeline):
+        """無角色時使用全域 flow_mode。"""
+        assert pipeline._get_effective_flow_name() == "tools"
+
+    def test_get_flow_viz_html_with_flow_name(self, pipeline):
+        """_get_flow_viz_html 接受 flow_name 參數。"""
+        html = pipeline._get_flow_viz_html(flow_name="tools")
+        assert isinstance(html, str)
+
+    def test_get_flow_viz_html_with_node_statuses(self, pipeline):
+        """_get_flow_viz_html 接受 node_statuses 並注入狀態。"""
+        from voice_assistant.flows.visualization import NodeStatus
+
+        statuses = {"llm_call": NodeStatus.COMPLETED}
+        html = pipeline._get_flow_viz_html(flow_name="tools", node_statuses=statuses)
+        assert isinstance(html, str)
+        # 注入狀態後 HTML 應包含 completed class
+        assert "completed" in html
