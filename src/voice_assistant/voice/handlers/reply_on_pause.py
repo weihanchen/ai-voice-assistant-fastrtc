@@ -249,11 +249,15 @@ def create_voice_stream(settings: Settings) -> Stream:
 
         logger.info("[Handler] 開始處理上傳的音訊檔案")
 
+        # 先推送一次流程圖，避免第一次上傳時 UI 未更新
+        initial_flow_viz = pipeline._get_flow_viz_html()
+        yield current_chatbot, current_status, None, initial_flow_viz
+
         # 使用 pipeline 處理音訊（generator 模式）
         # 每次收到 AdditionalOutputs 即 yield 更新給 UI
         final_chatbot = current_chatbot
         final_status = current_status
-        final_flow_viz = current_flow_viz
+        final_flow_viz = initial_flow_viz
 
         try:
             for output in pipeline.process_audio_with_outputs(processed_audio):
@@ -297,6 +301,9 @@ def create_voice_stream(settings: Settings) -> Stream:
             with gr.Column(scale=2):
                 chatbot.render()
                 clear_btn = gr.Button("🗑️ 清除對話", variant="secondary")
+                # 流程視覺化面板
+                with gr.Accordion("📊 流程圖", open=False):
+                    flow_viz.render()
 
             # 右側：控制區
             with gr.Column(scale=1):
@@ -340,10 +347,6 @@ def create_voice_stream(settings: Settings) -> Stream:
                         sources=["upload"],
                     )
                     submit_btn = gr.Button("🎯 處理音訊", variant="primary")
-
-                # 流程視覺化面板
-                with gr.Accordion("📊 流程圖", open=False):
-                    flow_viz.render()
 
         # 綁定 WebRTC 串流事件
         webrtc.stream(

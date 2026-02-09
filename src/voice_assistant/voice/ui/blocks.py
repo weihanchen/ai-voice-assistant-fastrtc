@@ -193,7 +193,7 @@ _MERMAID_HTML_TEMPLATE = """
 <!DOCTYPE html>
 <html>
 <head>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@11.12.2/dist/mermaid.min.js"></script>
   <style>
     body {{ margin: 0; padding: 10px; background: transparent; }}
     .node.running rect, .node.running polygon {{ fill: #FFB300 !important; }}

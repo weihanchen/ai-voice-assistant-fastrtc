@@ -80,10 +80,10 @@ src/voice_assistant/
 
 tests/
 ├── unit/
-│   └── flows/
-│       ├── test_base_flow_executor.py   # 🆕 BaseFlowExecutor 測試
-│       ├── test_flow_registry.py        # 🆕 FlowRegistry 測試
-│       └── test_tool_calling_executor.py # 🆕 ToolCallingExecutor 測試
+│   ├── flows/
+│   │   ├── test_base_flow_executor.py   # 🆕 BaseFlowExecutor 測試
+│   │   ├── test_flow_registry.py        # 🆕 FlowRegistry 測試
+│   │   └── test_tool_calling_executor.py # 🆕 ToolCallingExecutor 測試
 │   └── tools/
 │       └── test_auto_discover.py        # 🆕 自動掃描測試
 └── integration/
