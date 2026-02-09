@@ -85,6 +85,7 @@ def apply_node_labels(
     Returns:
         替換標籤後的 Mermaid 原始碼
     """
+
     def replace_bracket_label(text: str, node_id: str, label: str) -> str:
         needle = f"{node_id}["
         index = 0
