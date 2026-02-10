@@ -20,15 +20,16 @@ class TestDiscoverAgents:
         return llm_client, tool_registry
 
     def test_discovers_four_agents(self) -> None:
-        """discover_agents 能發現 4 個 Agent（Weather, Finance, Travel, General）。"""
+        """測試 discover_agents 能發現 5 個 Agent。"""
         llm_client, tool_registry = self._make_deps()
         agents = discover_agents(llm_client, tool_registry)
 
         assert AgentType.WEATHER in agents
         assert AgentType.FINANCE in agents
         assert AgentType.TRAVEL in agents
+        assert AgentType.FOOD in agents
         assert AgentType.GENERAL in agents
-        assert len(agents) == 4
+        assert len(agents) == 5
 
     def test_does_not_register_base_agent(self) -> None:
         """discover_agents 不會註冊 BaseAgent 本身。"""

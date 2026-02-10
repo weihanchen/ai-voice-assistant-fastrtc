@@ -176,6 +176,9 @@ def create_multi_agent_graph(
             # 如果是 travel agent，取 recommendations
             elif results[0].agent_type == AgentType.TRAVEL:
                 final_response = data.get("recommendations", "")
+            # 如果是 food agent，取 response
+            elif results[0].agent_type == AgentType.FOOD:
+                final_response = data.get("response", "")
             else:
                 # 其他情況由 supervisor 彙整
                 final_response = await supervisor.aggregate(user_input, results)

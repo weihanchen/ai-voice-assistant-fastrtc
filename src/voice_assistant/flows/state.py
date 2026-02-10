@@ -10,7 +10,7 @@ from typing import Literal, TypedDict
 from pydantic import BaseModel
 
 # 意圖類型
-IntentType = Literal["weather", "exchange", "stock", "travel"]
+IntentType = Literal["weather", "exchange", "stock", "travel", "food"]
 
 # 建議類型
 RecommendationType = Literal["outdoor", "indoor", "alternative_date"]
@@ -43,6 +43,24 @@ class TravelPlanState(TypedDict, total=False):
     recommendations: list[str]
 
 
+class FoodRecommendInfo(BaseModel):
+    """美食推薦資訊結構。"""
+
+    city: str
+    temperature: float
+    weather: str
+    is_outdoor_friendly: bool
+
+
+class FoodRecommendState(TypedDict, total=False):
+    """美食推薦子流程狀態。"""
+
+    city: str | None
+    weather_info: FoodRecommendInfo | None
+    venue_type: Literal["outdoor", "indoor"] | None
+    recommendation: str | None
+
+
 class FlowState(TypedDict, total=False):
     """LangGraph 主流程狀態。"""
 
@@ -59,6 +77,9 @@ class FlowState(TypedDict, total=False):
 
     # 旅遊規劃（由子流程填充）
     travel_state: TravelPlanState | None
+
+    # 美食推薦（由子流程填充）
+    food_state: FoodRecommendState | None
 
     # 輸出
     response: str
