@@ -42,10 +42,21 @@ def create_query_weather_node(tool_registry: ToolRegistry) -> Any:
                 return {"error": f"天氣查詢失敗：{result.error}"}
 
             weather_data = result.data or {}
+            # 防禦性地存取天氣資料
+            temperature = weather_data.get("temperature")
+            weather = weather_data.get("weather")
+            if temperature is None or weather is None:
+                logger.warning(
+                    "天氣回應缺少必要欄位: temperature=%s, weather=%s",
+                    temperature,
+                    weather,
+                )
+                return {"error": "天氣資料不完整，請稍後再試"}
+
             weather_info = FoodRecommendInfo(
                 city=city,
-                temperature=weather_data["temperature"],
-                weather=weather_data["weather"],
+                temperature=temperature,
+                weather=weather,
                 is_outdoor_friendly=False,  # 將由下一個節點決定
             )
 

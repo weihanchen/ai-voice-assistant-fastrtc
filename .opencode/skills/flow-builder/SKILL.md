@@ -259,7 +259,7 @@ def create_<node_name>_node(llm_client: LLMClient) -> Any:
                 ],
             )
 
-            content = response.choices[0].message.content or ""
+            content = response.content or ""
             # 移除可能的 markdown 程式碼區塊標記
             content = content.strip().removeprefix("```json").removesuffix("```").strip()
             result = json.loads(content)

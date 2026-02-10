@@ -73,17 +73,17 @@ class FoodAgent(BaseAgent):
             user_input = task.description
 
             # 執行美食推薦流程
-            response = await self.executor.execute(user_input)
+            success, message = await self.executor.execute(user_input)
 
             execution_time = time() - start_time
 
-            # 檢查是否有錯誤
-            if "錯誤" in response or "失敗" in response:
+            # 檢查執行結果
+            if not success:
                 return AgentResult(
                     task_id=task.task_id,
                     agent_type=self.agent_type,
                     success=False,
-                    error=response,
+                    error=message,
                     execution_time=execution_time,
                 )
 
@@ -91,7 +91,7 @@ class FoodAgent(BaseAgent):
                 task_id=task.task_id,
                 agent_type=self.agent_type,
                 success=True,
-                data={"response": response},
+                data={"response": message},
                 execution_time=execution_time,
             )
 

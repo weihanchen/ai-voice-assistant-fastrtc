@@ -19,7 +19,7 @@ class TestDiscoverAgents:
         tool_registry = MagicMock()
         return llm_client, tool_registry
 
-    def test_discovers_four_agents(self) -> None:
+    def test_discovers_five_agents(self) -> None:
         """測試 discover_agents 能發現 5 個 Agent。"""
         llm_client, tool_registry = self._make_deps()
         agents = discover_agents(llm_client, tool_registry)

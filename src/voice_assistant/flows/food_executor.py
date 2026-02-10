@@ -10,6 +10,10 @@ from typing import TYPE_CHECKING
 
 from voice_assistant.flows.base import BaseFlowExecutor, NodeChangeCallback
 from voice_assistant.flows.graphs.food import create_food_recommend_graph
+from voice_assistant.flows.visualization import (
+    apply_node_labels,
+    get_mermaid_diagram,
+)
 
 if TYPE_CHECKING:
     from voice_assistant.llm.client import LLMClient
@@ -54,7 +58,7 @@ class FoodRecommendFlowExecutor(BaseFlowExecutor):
         self,
         user_input: str,
         on_node_change: NodeChangeCallback | None = None,
-    ) -> str:
+    ) -> tuple[bool, str]:
         """執行美食推薦流程。
 
         Args:
@@ -62,17 +66,23 @@ class FoodRecommendFlowExecutor(BaseFlowExecutor):
             on_node_change: 節點狀態變更回呼。
 
         Returns:
-            流程產生的回應文字。
+            (success, message) 元組，其中 success 為布林值，message 為結果或錯誤訊息。
         """
         initial_state: dict = {"user_input": user_input}
 
-        result = await self._graph.ainvoke(initial_state)
+        try:
+            result = await self._graph.ainvoke(initial_state)
+        except Exception as exc:
+            logger.exception("美食推薦流程執行失敗")
+            return (False, f"處理過程中發生錯誤：{exc}")
 
         if error := result.get("error"):
-            return f"處理過程中發生錯誤：{error}"
+            return (False, f"處理過程中發生錯誤：{error}")
 
-        return result.get("response", "抱歉，無法產生回應。")
+        message = result.get("response", "抱歉，無法產生回應。")
+        return (True, message)
 
     def get_visualization(self) -> str | None:
         """取得 Mermaid 視覺化圖表。"""
-        return self._MERMAID_DIAGRAM
+        raw = get_mermaid_diagram(self._graph)
+        return apply_node_labels(raw, self._NODE_LABELS)
