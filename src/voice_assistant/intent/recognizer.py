@@ -3,11 +3,14 @@
 """
 
 import json
+import logging
 
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.llm.schemas import ChatMessage
 
 from .schemas import Intent
+
+logger = logging.getLogger(__name__)
 
 
 class IntentRecognizer:
@@ -93,9 +96,32 @@ class IntentRecognizer:
 - 使用者沒有明確提到角色切換或美食推薦需求"""
 
         user_msg = ChatMessage(role="user", content=text)
-        response = await self.llm_client.chat(
-            [user_msg], tools=tools, system_prompt=system_msg
-        )
+
+        # 在 try/except 塊中包裝外部 API 調用
+        try:
+            response = await self.llm_client.chat(
+                [user_msg], tools=tools, system_prompt=system_msg
+            )
+        except Exception as e:
+            logger.exception(
+                "意圖辨識 LLM API 調用失敗 - "
+                "user_msg.content=%s, "
+                "tools names=%s, "
+                "system_msg length=%d, "
+                "error=%s",
+                text[:100],  # 限制日誌中的文本長度
+                [t["function"]["name"] for t in tools],
+                len(system_msg),
+                str(e),
+            )
+            # 返回錯誤意圖而非靜默失敗
+            return Intent(
+                name="error",
+                description=f"意圖辨識服務暫時無法使用：{type(e).__name__}",
+                params={"error_context": "llm_api_call_failed"},
+                score=None,
+            )
+
         tool_calls = response.tool_calls or []
         for call in tool_calls:
             function_name = call.function.get("name")
