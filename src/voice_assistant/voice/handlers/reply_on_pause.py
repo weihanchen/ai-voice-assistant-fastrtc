@@ -12,6 +12,7 @@ from fastrtc import AlgoOptions, ReplyOnPause, SileroVadOptions, Stream, WebRTC
 from voice_assistant.agents import MultiAgentExecutor
 from voice_assistant.config import Settings
 from voice_assistant.flows import FlowExecutor, FlowRegistry, ToolCallingExecutor
+from voice_assistant.flows.food_executor import FoodRecommendFlowExecutor
 from voice_assistant.llm.client import LLMClient
 from voice_assistant.roles.predefined.assistant import AssistantRole
 from voice_assistant.roles.predefined.coach import CoachRole
@@ -100,6 +101,7 @@ def create_voice_stream(settings: Settings) -> Stream:
     )
     flow_registry.register(FlowExecutor(llm_client, tool_registry))
     flow_registry.register(MultiAgentExecutor(llm_client, tool_registry))
+    flow_registry.register(FoodRecommendFlowExecutor(llm_client, tool_registry))
 
     # ----------
     # 初始化角色註冊表與預設角色

@@ -24,6 +24,7 @@ class AgentType(str, Enum):
     WEATHER = "weather"
     FINANCE = "finance"
     TRAVEL = "travel"
+    FOOD = "food"
     GENERAL = "general"
 
 

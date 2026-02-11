@@ -25,6 +25,7 @@ DECOMPOSE_SYSTEM_PROMPT = """\
 - weather: 天氣查詢（城市天氣、天氣預報）
 - finance: 財務查詢（匯率、股價）
 - travel: 旅遊規劃（景點推薦、行程建議）
+- food: 美食推薦（餐廳推薦，結合天氣和城市）
 - general: 通用對話（閒聊、無法分類的請求、出差注意事項）
 
 請分析使用者輸入，拆解成一個或多個子任務。每個子任務指定一個專家類型和具體參數。
@@ -53,11 +54,15 @@ DECOMPOSE_SYSTEM_PROMPT = """\
 輸入：「我想去台中玩」
 輸出：{"reasoning": "旅遊意圖，需天氣與景點", "tasks": [{"agent_type": "weather", "description": "查詢台中天氣", "parameters": {"city": "台中"}}, {"agent_type": "travel", "description": "推薦台中景點", "parameters": {"destination": "台中"}}]}
 
-範例4 - 出差助理：
+範例4 - 美食推薦：
+輸入：「台北有什麼好吃的餐廳」
+輸出：{"reasoning": "美食推薦意圖，需要查詢天氣並推薦餐廳", "tasks": [{"agent_type": "food", "description": "台北有什麼好吃的餐廳", "parameters": {"city": "台北"}}]}
+
+範例5 - 出差助理：
 輸入：「後天要去東京出差」
 輸出：{"reasoning": "出差意圖，需天氣、匯率和注意事項", "tasks": [{"agent_type": "weather", "description": "查詢東京天氣", "parameters": {"city": "東京"}}, {"agent_type": "finance", "description": "查詢日圓兌台幣匯率", "parameters": {"query_type": "exchange", "from_currency": "JPY", "to_currency": "TWD"}}, {"agent_type": "general", "description": "東京出差注意事項", "parameters": {"message": "請提供去東京出差的注意事項和建議"}}]}
 
-範例5 - 多城市天氣：
+範例6 - 多城市天氣：
 輸入：「台北和高雄今天天氣如何」
 輸出：{"reasoning": "查詢多個城市天氣", "tasks": [{"agent_type": "weather", "description": "查詢台北天氣", "parameters": {"city": "台北"}}, {"agent_type": "weather", "description": "查詢高雄天氣", "parameters": {"city": "高雄"}}]}
 """
