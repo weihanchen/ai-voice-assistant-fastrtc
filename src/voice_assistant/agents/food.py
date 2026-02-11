@@ -73,19 +73,9 @@ class FoodAgent(BaseAgent):
             user_input = task.description
 
             # 執行美食推薦流程
-            success, message = await self.executor.execute(user_input)
+            message = await self.executor.execute(user_input)
 
             execution_time = time() - start_time
-
-            # 檢查執行結果
-            if not success:
-                return AgentResult(
-                    task_id=task.task_id,
-                    agent_type=self.agent_type,
-                    success=False,
-                    error=message,
-                    execution_time=execution_time,
-                )
 
             return AgentResult(
                 task_id=task.task_id,
