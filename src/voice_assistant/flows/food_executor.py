@@ -8,7 +8,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
-from voice_assistant.flows.base import BaseFlowExecutor, NodeChangeCallback
+from voice_assistant.flows.base import BaseFlowExecutor
 from voice_assistant.flows.graphs.food import create_food_recommend_graph
 from voice_assistant.flows.visualization import (
     apply_node_labels,
@@ -57,30 +57,29 @@ class FoodRecommendFlowExecutor(BaseFlowExecutor):
     async def execute(
         self,
         user_input: str,
-        on_node_change: NodeChangeCallback | None = None,
-    ) -> tuple[bool, str]:
+    ) -> str:
         """執行美食推薦流程。
 
         Args:
             user_input: 使用者輸入文字。
-            on_node_change: 節點狀態變更回呼。
 
         Returns:
-            (success, message) 元組，其中 success 為布林值，message 為結果或錯誤訊息。
+            LLM 產生的回應文字。
         """
         initial_state: dict = {"user_input": user_input}
 
         try:
             result = await self._graph.ainvoke(initial_state)
-        except Exception as exc:
+        except Exception:
             logger.exception("美食推薦流程執行失敗")
-            return (False, f"處理過程中發生錯誤：{exc}")
+            return "抱歉，美食推薦流程執行失敗，請稍後重試。"
 
         if error := result.get("error"):
-            return (False, f"處理過程中發生錯誤：{error}")
+            logger.warning("美食推薦流程回傳錯誤：%s", error)
+            return "抱歉，無法完成美食推薦，請確保輸入合適的城市名稱。"
 
         message = result.get("response", "抱歉，無法產生回應。")
-        return (True, message)
+        return message
 
     def get_visualization(self) -> str | None:
         """取得 Mermaid 視覺化圖表。"""

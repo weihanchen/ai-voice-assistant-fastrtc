@@ -9,12 +9,21 @@ import json
 import logging
 from typing import TYPE_CHECKING, Any
 
+from pydantic import BaseModel, ValidationError
+
 from voice_assistant.flows.state import FlowState
 
 if TYPE_CHECKING:
     from voice_assistant.llm.client import LLMClient
 
 logger = logging.getLogger(__name__)
+
+
+class ExtractCityResponse(BaseModel):
+    """LLM 城市提取回應 schema。"""
+
+    city: str | None = None
+
 
 EXTRACT_CITY_SYSTEM_PROMPT = """你是一個城市名稱提取助手。
 
@@ -66,17 +75,22 @@ def create_extract_city_node(llm_client: LLMClient) -> Any:
             )
             result = json.loads(content)
 
-            city = result.get("city")
-            if not city:
+            # 使用 Pydantic 驗證回應格式
+            city_response = ExtractCityResponse(**result)
+
+            if not city_response.city:
                 return {"error": "無法從您的輸入中識別城市，請明確指定城市名稱。"}
 
             return {
                 "food_state": {
-                    "city": city,
+                    "city": city_response.city,
                 },
             }
-        except (json.JSONDecodeError, KeyError) as e:
-            logger.warning("extract_city 解析失敗: %s", e)
+        except json.JSONDecodeError as e:
+            logger.warning("extract_city JSON 解析失敗: %s", e)
+            return {"error": "城市提取處理失敗"}
+        except ValidationError as e:
+            logger.warning("extract_city Pydantic 驗證失敗: %s", e)
             return {"error": "城市提取處理失敗"}
         except Exception:
             logger.exception("extract_city 執行失敗")
